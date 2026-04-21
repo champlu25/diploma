@@ -1,0 +1,24 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Leasing CRM backend",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "hash:password": "node src/scripts/generatePasswordHash.js",
+    "bootstrap:owner": "node src/scripts/bootstrapOwner.js",
+    "bootstrap:admin": "node src/scripts/bootstrapAdmin.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "nodemailer": "^8.0.5",
+    "pg": "^8.20.0"
+  }
+}
