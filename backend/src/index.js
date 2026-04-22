@@ -72,6 +72,60 @@ const parseUserId = (value) => {
   return parsed;
 };
 
+const normalizeOptionalText = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+};
+
+const normalizeRequiredText = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+};
+
+const normalizeInn = (value) => normalizeRequiredText(value);
+
+const normalizeOptionalEmail = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized ? normalized : null;
+};
+
+const normalizeOptionalTimestamp = (value) => {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return Number.NaN;
+  }
+
+  return parsed;
+};
+
+const isInnValid = (inn) => /^\d{10}(\d{2})?$/.test(inn);
+
+const isEmailValid = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const parseCookies = (cookieHeader) => {
   if (!cookieHeader) {
     return {};
@@ -176,8 +230,6 @@ const buildPasswordSetupLink = (rawToken) =>
 const createPasswordSetupToken = async ({
   client,
   userId,
-  kind,
-  issuedByUserId,
   ttlMinutes,
 }) => {
   const rawToken = generateInviteToken();
@@ -201,13 +253,11 @@ const createPasswordSetupToken = async ({
       INSERT INTO password_setup_tokens (
         user_id,
         token_hash,
-        kind,
-        expires_at,
-        issued_by_user_id
+        expires_at
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2, $3)
     `,
-    [userId, tokenHash, kind, expiresAt, issuedByUserId],
+    [userId, tokenHash, expiresAt],
   );
 
   return {
@@ -338,9 +388,12 @@ app.get('/api/users', requireOwner, async (_req, res) => {
         SELECT
           u.id,
           u.email,
-          r.name AS role
+          r.name AS role,
+          u.group_lead_user_id,
+          gl.email AS group_lead_email
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
+        LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
         ORDER BY u.id ASC
       `,
     );
@@ -354,9 +407,566 @@ app.get('/api/users', requireOwner, async (_req, res) => {
   }
 });
 
+app.get('/api/companies', requireAuth, async (req, res) => {
+  const currentUserId = Number(req.auth.sub);
+
+  try {
+    const params = [currentUserId];
+    let whereSql = 'WHERE c.owner_user_id = $1';
+
+    if (req.auth.role === 'owner') {
+      whereSql = '';
+    } else if (req.auth.role === 'group_lead') {
+      whereSql = `
+        WHERE c.owner_user_id = $1
+          OR c.owner_user_id IN (
+            SELECT u.id
+            FROM users AS u
+            JOIN roles AS r ON r.id = u.role_id
+            WHERE u.group_lead_user_id = $1
+              AND r.name = 'manager'
+          )
+      `;
+    }
+
+    const result = await pool.query(
+      `
+        SELECT
+          c.id,
+          c.owner_user_id,
+          u.email AS owner_email,
+          c.name,
+          c.inn,
+          c.contact_name,
+          c.phone,
+          c.email,
+          c.comment,
+          c.next_contact_at,
+          c.created_at,
+          c.updated_at
+        FROM companies AS c
+        JOIN users AS u ON u.id = c.owner_user_id
+        ${whereSql}
+        ORDER BY c.id ASC
+      `,
+      params,
+    );
+
+    res.status(200).json({
+      companies: result.rows,
+    });
+  } catch (error) {
+    console.error('Не удалось получить компании:', error);
+    res.status(500).json({
+      message: 'Не удалось получить компании.',
+    });
+  }
+});
+
+app.get('/api/group-lead/managers', requireAuth, async (req, res) => {
+  const currentUserId = Number(req.auth.sub);
+
+  if (req.auth.role !== 'group_lead') {
+    res.status(403).json({
+      message: 'Требуются права руководителя группы.',
+    });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          u.id,
+          u.email,
+          COUNT(c.id)::INT AS companies_count
+        FROM users AS u
+        JOIN roles AS r ON r.id = u.role_id
+        LEFT JOIN companies AS c ON c.owner_user_id = u.id
+        WHERE r.name = 'manager'
+          AND u.group_lead_user_id = $1
+        GROUP BY u.id, u.email
+        ORDER BY u.id ASC
+      `,
+      [currentUserId],
+    );
+
+    res.status(200).json({
+      managers: result.rows,
+    });
+  } catch (error) {
+    console.error('Не удалось получить менеджеров группы:', error);
+    res.status(500).json({
+      message: 'Не удалось получить менеджеров группы.',
+    });
+  }
+});
+
+app.patch('/api/owner/users/:userId/group-lead', requireOwner, async (req, res) => {
+  const userId = parseUserId(req.params?.userId);
+  const groupLeadUserIdRaw = req.body?.groupLeadUserId;
+  const groupLeadUserId =
+    groupLeadUserIdRaw === null || typeof groupLeadUserIdRaw === 'undefined'
+      ? null
+      : parseUserId(groupLeadUserIdRaw);
+
+  if (!userId) {
+    res.status(400).json({
+      message: 'Некорректный userId.',
+    });
+    return;
+  }
+
+  if (groupLeadUserIdRaw !== null && typeof groupLeadUserIdRaw !== 'undefined' && !groupLeadUserId) {
+    res.status(400).json({
+      message: 'Некорректный groupLeadUserId.',
+    });
+    return;
+  }
+
+  if (groupLeadUserId && groupLeadUserId === userId) {
+    res.status(400).json({
+      message: 'Пользователь не может быть руководителем своей же группы.',
+    });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const managerResult = await client.query(
+      `
+        SELECT
+          u.id,
+          u.email,
+          r.name AS role
+        FROM users AS u
+        JOIN roles AS r ON r.id = u.role_id
+        WHERE u.id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+
+    if (managerResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({
+        message: 'Пользователь не найден.',
+      });
+      return;
+    }
+
+    const targetUser = managerResult.rows[0];
+    if (targetUser.role !== 'manager') {
+      await client.query('ROLLBACK');
+      res.status(400).json({
+        message: 'Назначать руководителя группы можно только пользователю с ролью manager.',
+      });
+      return;
+    }
+
+    if (!groupLeadUserId) {
+      await client.query('ROLLBACK');
+      res.status(400).json({
+        message: 'У менеджера обязательно должен быть закреплен руководитель группы.',
+      });
+      return;
+    }
+
+    if (groupLeadUserId) {
+      const leadResult = await client.query(
+        `
+          SELECT
+            u.id,
+            u.email,
+            r.name AS role
+          FROM users AS u
+          JOIN roles AS r ON r.id = u.role_id
+          WHERE u.id = $1
+          LIMIT 1
+        `,
+        [groupLeadUserId],
+      );
+
+      if (leadResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          message: 'Руководитель группы не найден.',
+        });
+        return;
+      }
+
+      if (leadResult.rows[0].role !== 'group_lead') {
+        await client.query('ROLLBACK');
+        res.status(400).json({
+          message: 'Указанный пользователь не является руководителем группы.',
+        });
+        return;
+      }
+    }
+
+    const updateResult = await client.query(
+      `
+        UPDATE users
+        SET group_lead_user_id = $1
+        WHERE id = $2
+        RETURNING id, email, group_lead_user_id
+      `,
+      [groupLeadUserId, userId],
+    );
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      message: 'Руководитель группы назначен.',
+      user: updateResult.rows[0],
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Не удалось назначить руководителя группы:', error);
+    res.status(500).json({
+      message: 'Не удалось назначить руководителя группы.',
+    });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/companies', requireAuth, async (req, res) => {
+  const currentUserId = Number(req.auth.sub);
+  const name = normalizeRequiredText(req.body?.name);
+  const inn = normalizeInn(req.body?.inn);
+  const contactName = normalizeOptionalText(req.body?.contactName);
+  const phone = normalizeOptionalText(req.body?.phone);
+  const email = normalizeOptionalEmail(req.body?.email);
+  const comment = normalizeOptionalText(req.body?.comment);
+  const nextContactAt = normalizeOptionalTimestamp(req.body?.nextContactAt);
+
+  if (!name) {
+    res.status(400).json({
+      message: 'Наименование компании обязательно.',
+    });
+    return;
+  }
+
+  if (!isInnValid(inn)) {
+    res.status(400).json({
+      message: 'ИНН должен содержать только цифры и иметь длину 10 или 12.',
+    });
+    return;
+  }
+
+  if (email && !isEmailValid(email)) {
+    res.status(400).json({
+      message: 'Некорректный формат email.',
+    });
+    return;
+  }
+
+  if (Number.isNaN(nextContactAt?.getTime?.())) {
+    res.status(400).json({
+      message: 'Некорректная дата следующего контакта.',
+    });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        INSERT INTO companies (
+          owner_user_id,
+          name,
+          inn,
+          contact_name,
+          phone,
+          email,
+          comment,
+          next_contact_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING
+          id,
+          owner_user_id,
+          (SELECT email FROM users WHERE id = owner_user_id) AS owner_email,
+          name,
+          inn,
+          contact_name,
+          phone,
+          email,
+          comment,
+          next_contact_at,
+          created_at,
+          updated_at
+      `,
+      [currentUserId, name, inn, contactName, phone, email, comment, nextContactAt],
+    );
+
+    res.status(201).json({
+      message: 'Компания успешно создана.',
+      company: result.rows[0],
+    });
+  } catch (error) {
+    if (error?.code === '23505') {
+      res.status(409).json({
+        message: 'Компания с таким ИНН уже существует.',
+      });
+      return;
+    }
+
+    console.error('Не удалось создать компанию:', error);
+    res.status(500).json({
+      message: 'Не удалось создать компанию.',
+    });
+  }
+});
+
+app.patch('/api/companies/:companyId', requireAuth, async (req, res) => {
+  const companyId = parseUserId(req.params?.companyId);
+  const currentUserId = Number(req.auth.sub);
+
+  if (!companyId) {
+    res.status(400).json({
+      message: 'Некорректный companyId.',
+    });
+    return;
+  }
+
+  const fieldsToUpdate = {};
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'name')) {
+    const name = normalizeRequiredText(req.body?.name);
+    if (!name) {
+      res.status(400).json({
+        message: 'Наименование компании обязательно.',
+      });
+      return;
+    }
+    fieldsToUpdate.name = name;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'inn')) {
+    const inn = normalizeInn(req.body?.inn);
+    if (!isInnValid(inn)) {
+      res.status(400).json({
+        message: 'ИНН должен содержать только цифры и иметь длину 10 или 12.',
+      });
+      return;
+    }
+    fieldsToUpdate.inn = inn;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'contactName')) {
+    fieldsToUpdate.contact_name = normalizeOptionalText(req.body?.contactName);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'phone')) {
+    fieldsToUpdate.phone = normalizeOptionalText(req.body?.phone);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'email')) {
+    const email = normalizeOptionalEmail(req.body?.email);
+    if (email && !isEmailValid(email)) {
+      res.status(400).json({
+        message: 'Некорректный формат email.',
+      });
+      return;
+    }
+    fieldsToUpdate.email = email;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'comment')) {
+    fieldsToUpdate.comment = normalizeOptionalText(req.body?.comment);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'nextContactAt')) {
+    const nextContactAt = normalizeOptionalTimestamp(req.body?.nextContactAt);
+    if (Number.isNaN(nextContactAt?.getTime?.())) {
+      res.status(400).json({
+        message: 'Некорректная дата следующего контакта.',
+      });
+      return;
+    }
+    fieldsToUpdate.next_contact_at = nextContactAt;
+  }
+
+  const updateKeys = Object.keys(fieldsToUpdate);
+  if (updateKeys.length === 0) {
+    res.status(400).json({
+      message: 'Нет полей для обновления.',
+    });
+    return;
+  }
+
+  try {
+    const companyResult = await pool.query(
+      `
+        SELECT
+          c.id,
+          c.owner_user_id,
+          CASE
+            WHEN $2 = 'owner' THEN TRUE
+            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN $2 = 'group_lead' AND EXISTS (
+              SELECT 1
+              FROM users AS u
+              JOIN roles AS r ON r.id = u.role_id
+              WHERE u.id = c.owner_user_id
+                AND u.group_lead_user_id = $1
+                AND r.name = 'manager'
+            ) THEN TRUE
+            ELSE FALSE
+          END AS can_manage
+        FROM companies
+        WHERE id = $3
+        LIMIT 1
+      `,
+      [currentUserId, req.auth.role, companyId],
+    );
+
+    if (companyResult.rowCount === 0) {
+      res.status(404).json({
+        message: 'Компания не найдена.',
+      });
+      return;
+    }
+
+    const company = companyResult.rows[0];
+    if (!company.can_manage) {
+      res.status(404).json({
+        message: 'Компания не найдена.',
+      });
+      return;
+    }
+
+    const values = [];
+    const assignments = updateKeys.map((key, index) => {
+      values.push(fieldsToUpdate[key]);
+      return `${key} = $${index + 1}`;
+    });
+    values.push(companyId);
+
+    const updateResult = await pool.query(
+      `
+        UPDATE companies
+        SET ${assignments.join(', ')}
+        WHERE id = $${values.length}
+        RETURNING
+          id,
+          owner_user_id,
+          (SELECT email FROM users WHERE id = owner_user_id) AS owner_email,
+          name,
+          inn,
+          contact_name,
+          phone,
+          email,
+          comment,
+          next_contact_at,
+          created_at,
+          updated_at
+      `,
+      values,
+    );
+
+    res.status(200).json({
+      message: 'Компания обновлена.',
+      company: updateResult.rows[0],
+    });
+  } catch (error) {
+    if (error?.code === '23505') {
+      res.status(409).json({
+        message: 'Компания с таким ИНН уже существует.',
+      });
+      return;
+    }
+
+    console.error('Не удалось обновить компанию:', error);
+    res.status(500).json({
+      message: 'Не удалось обновить компанию.',
+    });
+  }
+});
+
+app.delete('/api/companies/:companyId', requireAuth, async (req, res) => {
+  const companyId = parseUserId(req.params?.companyId);
+  const currentUserId = Number(req.auth.sub);
+
+  if (!companyId) {
+    res.status(400).json({
+      message: 'Некорректный companyId.',
+    });
+    return;
+  }
+
+  try {
+    const companyResult = await pool.query(
+      `
+        SELECT
+          c.id,
+          c.owner_user_id,
+          CASE
+            WHEN $2 = 'owner' THEN TRUE
+            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN $2 = 'group_lead' AND EXISTS (
+              SELECT 1
+              FROM users AS u
+              JOIN roles AS r ON r.id = u.role_id
+              WHERE u.id = c.owner_user_id
+                AND u.group_lead_user_id = $1
+                AND r.name = 'manager'
+            ) THEN TRUE
+            ELSE FALSE
+          END AS can_manage
+        FROM companies
+        WHERE id = $3
+        LIMIT 1
+      `,
+      [currentUserId, req.auth.role, companyId],
+    );
+
+    if (companyResult.rowCount === 0) {
+      res.status(404).json({
+        message: 'Компания не найдена.',
+      });
+      return;
+    }
+
+    const company = companyResult.rows[0];
+    if (!company.can_manage) {
+      res.status(404).json({
+        message: 'Компания не найдена.',
+      });
+      return;
+    }
+
+    await pool.query(
+      `
+        DELETE FROM companies
+        WHERE id = $1
+      `,
+      [companyId],
+    );
+
+    res.status(200).json({
+      message: 'Компания удалена.',
+    });
+  } catch (error) {
+    console.error('Не удалось удалить компанию:', error);
+    res.status(500).json({
+      message: 'Не удалось удалить компанию.',
+    });
+  }
+});
+
 app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   const roleName = normalizeRole(req.body?.role);
+  const groupLeadUserIdRaw = req.body?.groupLeadUserId;
+  const groupLeadUserId =
+    groupLeadUserIdRaw === null || typeof groupLeadUserIdRaw === 'undefined'
+      ? null
+      : parseUserId(groupLeadUserIdRaw);
 
   if (!email || !roleName) {
     res.status(400).json({
@@ -368,6 +978,31 @@ app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
   if (!inviteAllowedRoles.has(roleName)) {
     res.status(400).json({
       message: 'Роль должна быть manager или group_lead.',
+    });
+    return;
+  }
+
+  if (roleName === 'manager' && !groupLeadUserId) {
+    res.status(400).json({
+      message: 'Для менеджера нужно указать руководителя группы.',
+    });
+    return;
+  }
+
+  if (roleName === 'group_lead' && groupLeadUserId !== null) {
+    res.status(400).json({
+      message: 'Для роли руководителя группы нельзя указывать руководителя группы.',
+    });
+    return;
+  }
+
+  if (
+    groupLeadUserIdRaw !== null &&
+    typeof groupLeadUserIdRaw !== 'undefined' &&
+    !groupLeadUserId
+  ) {
+    res.status(400).json({
+      message: 'Некорректный groupLeadUserId.',
     });
     return;
   }
@@ -399,6 +1034,37 @@ app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
       return;
     }
 
+    if (roleName === 'manager') {
+      const groupLeadResult = await client.query(
+        `
+          SELECT
+            u.id,
+            r.name AS role
+          FROM users AS u
+          JOIN roles AS r ON r.id = u.role_id
+          WHERE u.id = $1
+          LIMIT 1
+        `,
+        [groupLeadUserId],
+      );
+
+      if (groupLeadResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          message: 'Руководитель группы не найден.',
+        });
+        return;
+      }
+
+      if (groupLeadResult.rows[0].role !== 'group_lead') {
+        await client.query('ROLLBACK');
+        res.status(400).json({
+          message: 'Указанный пользователь не является руководителем группы.',
+        });
+        return;
+      }
+    }
+
     const existingUserResult = await client.query(
       `
         SELECT
@@ -423,24 +1089,23 @@ app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
 
     const userInsertResult = await client.query(
       `
-        INSERT INTO users (email, password_hash, role_id)
-        VALUES ($1, NULL, $2)
-        RETURNING id, email
+        INSERT INTO users (email, password_hash, role_id, group_lead_user_id)
+        VALUES ($1, NULL, $2, $3)
+        RETURNING id, email, group_lead_user_id
       `,
-      [email, roleResult.rows[0].id],
+      [email, roleResult.rows[0].id, roleName === 'manager' ? groupLeadUserId : null],
     );
 
     invitedUser = {
       id: userInsertResult.rows[0].id,
       email: userInsertResult.rows[0].email,
       role: roleName,
+      groupLeadUserId: userInsertResult.rows[0].group_lead_user_id,
     };
 
     const tokenData = await createPasswordSetupToken({
       client,
       userId: invitedUser.id,
-      kind: 'invite',
-      issuedByUserId: Number(req.auth.sub),
       ttlMinutes: inviteTtlHours * 60,
     });
 
@@ -533,8 +1198,6 @@ app.post('/api/owner/users/:userId/password-link', requireOwner, async (req, res
     const tokenData = await createPasswordSetupToken({
       client,
       userId,
-      kind: 'owner_reset',
-      issuedByUserId: Number(req.auth.sub),
       ttlMinutes: ownerPasswordLinkTtlMinutes,
     });
 

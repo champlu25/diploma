@@ -1,7 +1,9 @@
 ﻿import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { getCurrentUser, logout } from "./api/authApi";
+import { AppShell } from "./components/AppShell";
 import { AdminPage } from "./pages/AdminPage";
+import { CompaniesPage } from "./pages/CompaniesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetPasswordPage } from "./pages/SetPasswordPage";
 import { UserHomePage } from "./pages/UserHomePage";
@@ -52,52 +54,66 @@ function App() {
 
   if (isSessionLoading) {
     return (
-      <main className="auth-layout">
-        <section className="card">
-          <p className="status">Проверка сессии...</p>
-        </section>
-      </main>
+      <div className="app-loading">
+        <p className="status">Проверка сессии...</p>
+      </div>
     );
   }
 
   return (
     <BrowserRouter>
-      <main className="auth-layout">
-        {sessionError && <p className="status status--error">{sessionError}</p>}
+      <Routes>
+        <Route
+          path="/set-password"
+          element={
+            <main className="auth-layout">
+              <SetPasswordPage />
+            </main>
+          }
+        />
 
-        <Routes>
-          <Route path="/set-password" element={<SetPasswordPage />} />
-
-          <Route
-            path="/login"
-            element={
-              currentUser ? (
-                <Navigate to="/" replace />
-              ) : (
+        <Route
+          path="/login"
+          element={
+            currentUser ? (
+              <Navigate to="/" replace />
+            ) : (
+              <main className="auth-layout">
                 <LoginPage onLogin={setCurrentUser} />
-              )
-            }
-          />
+              </main>
+            )
+          }
+        />
 
+        <Route
+          path="/"
+          element={
+            !currentUser ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <AppShell
+                currentUser={currentUser}
+                onLogout={handleLogout}
+                sessionError={sessionError}
+              />
+            )
+          }
+        >
           <Route
-            path="/"
+            index
             element={
-              !currentUser ? (
-                <Navigate to="/login" replace />
-              ) : currentUser.role === "owner" ? (
-                <AdminPage currentUser={currentUser} onLogout={handleLogout} />
+              currentUser?.role === "owner" ? (
+                <AdminPage currentUser={currentUser!} />
               ) : (
-                <UserHomePage currentUser={currentUser} onLogout={handleLogout} />
+                <UserHomePage currentUser={currentUser!} />
               )
             }
           />
+          <Route path="companies" element={<CompaniesPage currentUser={currentUser!} />} />
+        </Route>
 
-          <Route
-            path="*"
-            element={<Navigate to={currentUser ? "/" : "/login"} replace />}
-          />
-        </Routes>
-      </main>
+        <Route path="*" element={<Navigate to={currentUser ? "/" : "/login"} replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }

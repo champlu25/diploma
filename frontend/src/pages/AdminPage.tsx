@@ -1,5 +1,6 @@
-﻿import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  assignManagerToGroupLead,
   createOwnerPasswordLink,
   getUsers,
   inviteUser,
@@ -11,16 +12,16 @@ import { getRoleLabel } from "../utils/roles";
 
 interface AdminPageProps {
   currentUser: AuthUser;
-  onLogout: () => Promise<void>;
 }
 
-export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
+export function AdminPage({ currentUser }: AdminPageProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<InviteRole>("manager");
+  const [inviteGroupLeadUserId, setInviteGroupLeadUserId] = useState<string>("");
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
@@ -30,6 +31,12 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [rowActionError, setRowActionError] = useState<string | null>(null);
   const [rowActionSuccess, setRowActionSuccess] = useState<string | null>(null);
   const [manualPasswordLink, setManualPasswordLink] = useState<string | null>(null);
+  const [assigningManagerId, setAssigningManagerId] = useState<number | null>(null);
+
+  const groupLeads = useMemo(
+    () => users.filter((user) => user.role === "group_lead"),
+    [users],
+  );
 
   const loadUsers = useCallback(async () => {
     try {
@@ -45,14 +52,14 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   }, []);
 
   useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      void loadUsers();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timerId);
-    };
+    void loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    if (inviteRole === "manager" && !inviteGroupLeadUserId && groupLeads.length > 0) {
+      setInviteGroupLeadUserId(String(groupLeads[0].id));
+    }
+  }, [groupLeads, inviteRole, inviteGroupLeadUserId]);
 
   const handleInviteSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,13 +69,20 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       return;
     }
 
+    if (inviteRole === "manager" && !inviteGroupLeadUserId) {
+      setInviteError("Для менеджера нужно выбрать руководителя группы.");
+      return;
+    }
+
     try {
       setIsInviteSubmitting(true);
       setInviteError(null);
       setInviteSuccess(null);
       setLastInviteLink(null);
 
-      const result = await inviteUser(inviteEmail.trim(), inviteRole);
+      const groupLeadUserId = inviteRole === "manager" ? Number(inviteGroupLeadUserId) : null;
+      const result = await inviteUser(inviteEmail.trim(), inviteRole, groupLeadUserId);
+
       setInviteSuccess(result.message);
       setLastInviteLink(result.inviteLink ?? null);
       setInviteEmail("");
@@ -108,18 +122,36 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     }
   };
 
+  const handleAssignGroupLead = async (manager: User, nextGroupLeadUserId: string) => {
+    const parsed = Number(nextGroupLeadUserId);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      setRowActionError("Выберите корректного руководителя группы.");
+      return;
+    }
+
+    try {
+      setAssigningManagerId(manager.id);
+      setRowActionError(null);
+      setRowActionSuccess(null);
+      await assignManagerToGroupLead(manager.id, parsed);
+      setRowActionSuccess(`Менеджер ${manager.email} закреплен за руководителем группы.`);
+      await loadUsers();
+    } catch (requestError) {
+      setRowActionError(
+        getApiErrorMessage(requestError, "Не удалось закрепить менеджера за руководителем группы."),
+      );
+    } finally {
+      setAssigningManagerId(null);
+    }
+  };
+
   return (
-    <section className="card card--wide">
-      <header className="card__header">
-        <div>
-          <h1 className="card__title">Панель владельца</h1>
-          <p className="card__subtitle">
-            Вы вошли как <strong>{currentUser.email}</strong> ({getRoleLabel(currentUser.role)}).
-          </p>
-        </div>
-        <button className="button button--ghost" onClick={() => void onLogout()}>
-          Выйти
-        </button>
+    <section className="panel">
+      <header className="panel__header">
+        <h1 className="panel__title">Администрирование</h1>
+        <p className="panel__subtitle">
+          Вы вошли как <strong>{currentUser.email}</strong> ({getRoleLabel(currentUser.role)}).
+        </p>
       </header>
 
       <section className="section">
@@ -142,13 +174,41 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
             <select
               className="form__input"
               value={inviteRole}
-              onChange={(event) => setInviteRole(event.target.value as InviteRole)}
+              onChange={(event) => {
+                const nextRole = event.target.value as InviteRole;
+                setInviteRole(nextRole);
+                if (nextRole === "group_lead") {
+                  setInviteGroupLeadUserId("");
+                }
+              }}
               disabled={isInviteSubmitting}
             >
               <option value="manager">Менеджер</option>
               <option value="group_lead">Руководитель группы</option>
             </select>
           </label>
+
+          {inviteRole === "manager" && (
+            <label className="form__field">
+              <span className="form__label">Руководитель группы</span>
+              <select
+                className="form__input"
+                value={inviteGroupLeadUserId}
+                onChange={(event) => setInviteGroupLeadUserId(event.target.value)}
+                disabled={isInviteSubmitting || groupLeads.length === 0}
+              >
+                {groupLeads.length === 0 ? (
+                  <option value="">Сначала создайте руководителя группы</option>
+                ) : (
+                  groupLeads.map((lead) => (
+                    <option value={lead.id} key={lead.id}>
+                      {lead.email}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          )}
 
           <label className="form__field form__field--stretch">
             <button className="button" type="submit" disabled={isInviteSubmitting}>
@@ -162,20 +222,20 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         {lastInviteLink && (
           <p className="form__helper">
             Отладочная ссылка приглашения:{" "}
-            <a className="link" href={lastInviteLink}>{lastInviteLink}</a>
+            <a className="link" href={lastInviteLink}>
+              {lastInviteLink}
+            </a>
           </p>
         )}
       </section>
 
       <section className="section">
         <header className="section__header">
-          <h2 className="section__title">Пользователи</h2>
+          <h2 className="section__title">Пользователи и группы</h2>
           <button className="button button--ghost" onClick={() => void loadUsers()}>
             Обновить
           </button>
         </header>
-
-        <p className="form__hint">Действие: открыть страницу смены пароля для любого пользователя.</p>
 
         {isUsersLoading && <p className="status">Загрузка пользователей...</p>}
         {usersError && <p className="status status--error">{usersError}</p>}
@@ -184,35 +244,61 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         {manualPasswordLink && (
           <p className="form__helper">
             Ручная ссылка для смены пароля:{" "}
-            <a className="link" href={manualPasswordLink}>{manualPasswordLink}</a>
+            <a className="link" href={manualPasswordLink}>
+              {manualPasswordLink}
+            </a>
           </p>
         )}
 
         {!isUsersLoading && !usersError && (
-          <div className="users-table">
+          <div className="users-table users-table--groups">
             <div className="users-table__row users-table__row--head">
               <span>ID</span>
               <span>Эл. почта</span>
               <span>Роль</span>
+              <span>Руководитель группы</span>
               <span>Действия</span>
             </div>
 
             {users.map((user) => {
-              const isBusy = isRowActionLoading === user.id;
+              const isBusyPassword = isRowActionLoading === user.id;
+              const isBusyAssign = assigningManagerId === user.id;
 
               return (
                 <div className="users-table__row" key={user.id}>
                   <span>{user.id}</span>
                   <span>{user.email}</span>
                   <span>{getRoleLabel(user.role)}</span>
+                  <span>
+                    {user.role === "manager" ? (
+                      <select
+                        className="form__input users-table__select"
+                        value={user.groupLeadUserId ? String(user.groupLeadUserId) : ""}
+                        onChange={(event) => void handleAssignGroupLead(user, event.target.value)}
+                        disabled={isBusyAssign || groupLeads.length === 0}
+                      >
+                        {groupLeads.length === 0 ? (
+                          <option value="">Нет руководителей группы</option>
+                        ) : (
+                          groupLeads.map((lead) => (
+                            <option value={lead.id} key={lead.id}>
+                              {lead.email}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    ) : (
+                      user.groupLeadEmail || "—"
+                    )}
+                  </span>
                   <div className="users-table__actions">
                     <button
                       className="button button--ghost"
                       type="button"
-                      disabled={isBusy}
+                      disabled={isBusyPassword}
                       onClick={() => void handleOpenPasswordPage(user)}
                     >
-                      {isBusy ? "Создание ссылки..." : "Открыть страницу пароля"}
+                      {isBusyPassword ? "Создание ссылки..." : "Открыть страницу пароля"}
                     </button>
                   </div>
                 </div>

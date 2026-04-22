@@ -1,9 +1,17 @@
 :root {
-  --font-family-base: "Inter", "Segoe UI", sans-serif;
+  --font-family-base: "Poppins", "Segoe UI", sans-serif;
+  --font-family-heading: "Poppins", "Montserrat", "Segoe UI", sans-serif;
 
-  --color-bg-primary: #f6f7fb;
-  --color-text-primary: #111827;
-  --color-text-secondary: #4b5563;
+  --color-bg-primary: #edf2f7;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f7fafc;
+  --color-text-primary: #1c2526;
+  --color-text-secondary: #8e8e93;
+  --color-accent: #0f766e;
+  --color-accent-hover: #0b5d57;
+  --color-accent-soft: #dff7f3;
+  --color-border: #d6e0ea;
+  --color-danger: #c2410c;
 
   --radius-sm: 6px;
   --radius-md: 10px;

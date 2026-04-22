@@ -6,4 +6,7 @@ export interface AuthUser {
   role: UserRole;
 }
 
-export interface User extends AuthUser {}
+export interface User extends AuthUser {
+  groupLeadUserId?: number | null;
+  groupLeadEmail?: string | null;
+}
