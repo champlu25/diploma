@@ -45,6 +45,61 @@ if (!authJwtSecret) {
   throw new Error('AUTH_JWT_SECRET обязателен.');
 }
 
+const ensureInviteSchemaCompatibility = async () => {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const columnsResult = await client.query(
+      `
+        SELECT
+          column_name,
+          is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'users'
+          AND column_name IN ('last_name', 'first_name')
+      `,
+    );
+
+    const columns = new Map(
+      columnsResult.rows.map((row) => [row.column_name, row.is_nullable]),
+    );
+
+    const alterStatements = [];
+
+    if (columns.get('last_name') === 'NO') {
+      alterStatements.push('ALTER TABLE users ALTER COLUMN last_name DROP NOT NULL');
+    }
+
+    if (columns.get('first_name') === 'NO') {
+      alterStatements.push('ALTER TABLE users ALTER COLUMN first_name DROP NOT NULL');
+    }
+
+    if (alterStatements.length > 0) {
+      for (const statement of alterStatements) {
+        await client.query(statement);
+      }
+
+      console.warn(
+        'Схема БД обновлена автоматически: users.last_name/first_name теперь допускают NULL (для приглашений).',
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.warn(
+      'Не удалось автоматически поправить схему БД для приглашений (users.last_name/first_name). ' +
+        'Если приглашения не работают, примените миграции из backend/sql.',
+      error,
+    );
+  } finally {
+    client.release();
+  }
+};
+
 app.use(
   cors({
     origin: frontendOrigin,
@@ -277,6 +332,9 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
         SELECT
           u.id,
           u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
           r.name AS role
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
@@ -300,6 +358,9 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
+        lastName: user.last_name,
+        firstName: user.first_name,
+        middleName: user.middle_name,
         role: user.role,
       },
     });
@@ -328,6 +389,9 @@ app.post('/api/auth/login', async (req, res) => {
         SELECT
           u.id,
           u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
           u.password_hash,
           r.name AS role
         FROM users AS u
@@ -357,6 +421,9 @@ app.post('/api/auth/login', async (req, res) => {
     const authUser = {
       id: user.id,
       email: user.email,
+      lastName: user.last_name,
+      firstName: user.first_name,
+      middleName: user.middle_name,
       role: user.role,
     };
 
@@ -388,6 +455,9 @@ app.get('/api/users', requireOwner, async (_req, res) => {
         SELECT
           u.id,
           u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
           r.name AS role,
           u.group_lead_user_id,
           gl.email AS group_lead_email
@@ -411,10 +481,11 @@ app.get('/api/companies', requireAuth, async (req, res) => {
   const currentUserId = Number(req.auth.sub);
 
   try {
-    const params = [currentUserId];
+    let params = [currentUserId];
     let whereSql = 'WHERE c.owner_user_id = $1';
 
     if (req.auth.role === 'owner') {
+      params = [];
       whereSql = '';
     } else if (req.auth.role === 'group_lead') {
       whereSql = `
@@ -479,13 +550,16 @@ app.get('/api/group-lead/managers', requireAuth, async (req, res) => {
         SELECT
           u.id,
           u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
           COUNT(c.id)::INT AS companies_count
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
         LEFT JOIN companies AS c ON c.owner_user_id = u.id
         WHERE r.name = 'manager'
           AND u.group_lead_user_id = $1
-        GROUP BY u.id, u.email
+        GROUP BY u.id, u.email, u.last_name, u.first_name, u.middle_name
         ORDER BY u.id ASC
       `,
       [currentUserId],
@@ -612,7 +686,7 @@ app.patch('/api/owner/users/:userId/group-lead', requireOwner, async (req, res) 
         UPDATE users
         SET group_lead_user_id = $1
         WHERE id = $2
-        RETURNING id, email, group_lead_user_id
+        RETURNING id, email, last_name, first_name, middle_name, group_lead_user_id
       `,
       [groupLeadUserId, userId],
     );
@@ -818,8 +892,8 @@ app.patch('/api/companies/:companyId', requireAuth, async (req, res) => {
             ) THEN TRUE
             ELSE FALSE
           END AS can_manage
-        FROM companies
-        WHERE id = $3
+        FROM companies AS c
+        WHERE c.id = $3
         LIMIT 1
       `,
       [currentUserId, req.auth.role, companyId],
@@ -918,8 +992,8 @@ app.delete('/api/companies/:companyId', requireAuth, async (req, res) => {
             ) THEN TRUE
             ELSE FALSE
           END AS can_manage
-        FROM companies
-        WHERE id = $3
+        FROM companies AS c
+        WHERE c.id = $3
         LIMIT 1
       `,
       [currentUserId, req.auth.role, companyId],
@@ -1089,9 +1163,9 @@ app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
 
     const userInsertResult = await client.query(
       `
-        INSERT INTO users (email, password_hash, role_id, group_lead_user_id)
-        VALUES ($1, NULL, $2, $3)
-        RETURNING id, email, group_lead_user_id
+        INSERT INTO users (email, last_name, first_name, middle_name, password_hash, role_id, group_lead_user_id)
+        VALUES ($1, NULL, NULL, NULL, NULL, $2, $3)
+        RETURNING id, email, last_name, first_name, middle_name, group_lead_user_id
       `,
       [email, roleResult.rows[0].id, roleName === 'manager' ? groupLeadUserId : null],
     );
@@ -1099,6 +1173,9 @@ app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
     invitedUser = {
       id: userInsertResult.rows[0].id,
       email: userInsertResult.rows[0].email,
+      lastName: userInsertResult.rows[0].last_name,
+      firstName: userInsertResult.rows[0].first_name,
+      middleName: userInsertResult.rows[0].middle_name,
       role: roleName,
       groupLeadUserId: userInsertResult.rows[0].group_lead_user_id,
     };
@@ -1115,6 +1192,18 @@ app.post('/api/owner/users/invite', requireOwner, async (req, res) => {
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
+
+    if (
+      error?.code === '23502' &&
+      (error?.column === 'last_name' || error?.column === 'first_name')
+    ) {
+      res.status(500).json({
+        message:
+          'База данных не готова для приглашений: поля last_name/first_name в таблице users должны допускать NULL. ' +
+          'Примените миграции из backend/sql и перезапустите сервер.',
+      });
+      return;
+    }
 
     if (error?.code === '23505') {
       res.status(409).json({
@@ -1176,6 +1265,9 @@ app.post('/api/owner/users/:userId/password-link', requireOwner, async (req, res
         SELECT
           u.id,
           u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
           r.name AS role
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
@@ -1210,6 +1302,9 @@ app.post('/api/owner/users/:userId/password-link', requireOwner, async (req, res
       user: {
         id: targetUser.id,
         email: targetUser.email,
+        lastName: targetUser.last_name,
+        firstName: targetUser.first_name,
+        middleName: targetUser.middle_name,
         role: targetUser.role,
       },
       setupLink,
@@ -1246,6 +1341,9 @@ app.get('/api/password-setup/session', async (req, res) => {
           pst.expires_at,
           pst.used_at,
           u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
           r.name AS role
         FROM password_setup_tokens AS pst
         JOIN users AS u ON u.id = pst.user_id
@@ -1282,6 +1380,9 @@ app.get('/api/password-setup/session', async (req, res) => {
     res.status(200).json({
       session: {
         email: tokenRecord.email,
+        lastName: tokenRecord.last_name,
+        firstName: tokenRecord.first_name,
+        middleName: tokenRecord.middle_name,
         role: tokenRecord.role,
         expiresAt: new Date(tokenRecord.expires_at).toISOString(),
       },
@@ -1297,6 +1398,9 @@ app.get('/api/password-setup/session', async (req, res) => {
 app.post('/api/password-setup/complete', async (req, res) => {
   const token = normalizeToken(req.body?.token);
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const lastName = normalizeOptionalText(req.body?.lastName);
+  const firstName = normalizeOptionalText(req.body?.firstName);
+  const middleName = normalizeOptionalText(req.body?.middleName);
 
   if (!token || !password) {
     res.status(400).json({
@@ -1360,6 +1464,39 @@ app.post('/api/password-setup/complete', async (req, res) => {
       return;
     }
 
+    const userNameResult = await client.query(
+      `
+        SELECT
+          last_name,
+          first_name
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tokenRecord.user_id],
+    );
+
+    if (userNameResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({
+        message: 'Пользователь для этой ссылки не найден.',
+      });
+      return;
+    }
+
+    const existingNames = userNameResult.rows[0];
+    const effectiveLastName = lastName ?? existingNames.last_name;
+    const effectiveFirstName = firstName ?? existingNames.first_name;
+
+    if (!effectiveLastName || !effectiveFirstName) {
+      await client.query('ROLLBACK');
+      res.status(400).json({
+        message: 'Укажите фамилию и имя.',
+      });
+      return;
+    }
+
     const nextPasswordHash = hashPassword(password);
 
     const updateUserResult = await client.query(
@@ -1367,10 +1504,13 @@ app.post('/api/password-setup/complete', async (req, res) => {
         UPDATE users
         SET
           password_hash = $1,
+          last_name = $2,
+          first_name = $3,
+          middle_name = COALESCE($4, middle_name),
           updated_at = NOW()
-        WHERE id = $2
+        WHERE id = $5
       `,
-      [nextPasswordHash, tokenRecord.user_id],
+      [nextPasswordHash, effectiveLastName, effectiveFirstName, middleName, tokenRecord.user_id],
     );
 
     if (updateUserResult.rowCount === 0) {
@@ -1421,6 +1561,15 @@ app.post('/api/password-setup/complete', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Сервер запущен на порту ${port}`);
+const start = async () => {
+  await ensureInviteSchemaCompatibility();
+
+  app.listen(port, () => {
+    console.log(`Сервер запущен на порту ${port}`);
+  });
+};
+
+start().catch((error) => {
+  console.error('Не удалось запустить сервер:', error);
+  process.exit(1);
 });

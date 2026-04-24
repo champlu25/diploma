@@ -18,11 +18,16 @@ CREATE TABLE roles (
 CREATE TABLE users (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   email TEXT NOT NULL UNIQUE CHECK (char_length(trim(email)) > 3),
+  last_name TEXT NULL CHECK (last_name IS NULL OR char_length(trim(last_name)) > 0),
+  first_name TEXT NULL CHECK (first_name IS NULL OR char_length(trim(first_name)) > 0),
+  middle_name TEXT NULL CHECK (middle_name IS NULL OR char_length(trim(middle_name)) > 0),
   password_hash TEXT NULL CHECK (password_hash IS NULL OR char_length(trim(password_hash)) > 0),
   role_id BIGINT NOT NULL REFERENCES roles(id),
   group_lead_user_id BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT users_name_required_when_active_chk
+    CHECK (password_hash IS NULL OR (last_name IS NOT NULL AND first_name IS NOT NULL))
 );
 
 CREATE TABLE password_setup_tokens (

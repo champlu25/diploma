@@ -1,0 +1,13 @@
+.loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 20px;
+  background: var(--color-bg-primary);
+}
+
+.loadingText {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}

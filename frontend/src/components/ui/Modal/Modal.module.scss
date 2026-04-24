@@ -1,0 +1,62 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.panel {
+  width: min(540px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(214, 224, 234, 0.9);
+  background: var(--color-surface);
+  box-shadow: 0 26px 70px -54px rgba(15, 23, 42, 0.65);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: rgba(247, 250, 252, 0.92);
+  border-bottom: 1px solid rgba(214, 224, 234, 0.7);
+}
+
+.title {
+  font-family: var(--font-family-heading);
+  font-weight: 650;
+  font-size: 1.15rem;
+  color: var(--color-text-primary);
+}
+
+.body {
+  padding: 18px;
+}
+
+.closeButton {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 224, 234, 0.9);
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.closeButton:hover {
+  background: rgba(247, 250, 252, 1);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.closeButton:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}

@@ -1,0 +1,13 @@
+.icon {
+  display: inline-flex;
+  width: var(--size, 20px);
+  height: var(--size, 20px);
+  line-height: 0;
+  flex: 0 0 auto;
+}
+
+.icon :global(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

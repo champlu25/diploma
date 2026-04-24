@@ -1,0 +1,26 @@
+.alert {
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  font-weight: 500;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.error {
+  background: rgba(255, 59, 48, 0.08);
+  border-color: rgba(255, 59, 48, 0.22);
+  color: #b42318;
+}
+
+.success {
+  background: rgba(52, 199, 89, 0.12);
+  border-color: rgba(52, 199, 89, 0.22);
+  color: #15803d;
+}
+
+.info {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.22);
+  color: var(--color-accent-hover);
+}

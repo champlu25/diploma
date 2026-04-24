@@ -7,8 +7,7 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "hash:password": "node src/scripts/generatePasswordHash.js",
-    "bootstrap:owner": "node src/scripts/bootstrapOwner.js",
-    "bootstrap:admin": "node src/scripts/bootstrapAdmin.js"
+    "bootstrap:owner": "node src/scripts/bootstrapOwner.js"
   },
   "keywords": [],
   "author": "",

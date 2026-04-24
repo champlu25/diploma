@@ -6,16 +6,26 @@ const { hashPassword, validatePassword } = require('../security');
 
 const email = process.argv[2] ? String(process.argv[2]).trim().toLowerCase() : '';
 const password = process.argv[3] ? String(process.argv[3]) : '';
+const lastName = process.argv[4] ? String(process.argv[4]).trim() : '';
+const firstName = process.argv[5] ? String(process.argv[5]).trim() : '';
+const middleName = process.argv[6] ? String(process.argv[6]).trim() : '';
 
 const run = async () => {
   if (!email) {
-    console.error('Использование: npm run bootstrap:owner -- <email> <password>');
+    console.error(
+      'Использование: npm run bootstrap:owner -- <email> <password> <lastName> <firstName> [middleName]',
+    );
     process.exit(1);
   }
 
   const passwordError = validatePassword(password);
   if (passwordError) {
     console.error(passwordError);
+    process.exit(1);
+  }
+
+  if (!lastName || !firstName) {
+    console.error('Фамилия и имя обязательны.');
     process.exit(1);
   }
 
@@ -42,16 +52,19 @@ const run = async () => {
 
     const result = await client.query(
       `
-        INSERT INTO users (email, password_hash, role_id)
-        VALUES ($1, $2, $3)
+        INSERT INTO users (email, last_name, first_name, middle_name, password_hash, role_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (email) DO UPDATE
         SET
+          last_name = EXCLUDED.last_name,
+          first_name = EXCLUDED.first_name,
+          middle_name = EXCLUDED.middle_name,
           password_hash = EXCLUDED.password_hash,
           role_id = EXCLUDED.role_id,
           updated_at = NOW()
         RETURNING id, email
       `,
-      [email, passwordHash, roleId],
+      [email, lastName, firstName, middleName || null, passwordHash, roleId],
     );
 
     await client.query('COMMIT');

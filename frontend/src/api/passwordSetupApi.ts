@@ -2,6 +2,9 @@
 
 export interface PasswordSetupSession {
   email: string;
+  lastName?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
   role: string;
   expiresAt: string;
 }
@@ -30,10 +33,13 @@ export const getPasswordSetupSession = async (
 export const completePasswordSetup = async (
   token: string,
   password: string,
+  lastName: string,
+  firstName: string,
+  middleName: string | null,
 ): Promise<CompletePasswordSetupResponse> => {
   const { data } = await httpClient.post<CompletePasswordSetupResponse>(
     "/api/password-setup/complete",
-    { token, password },
+    { token, password, lastName, firstName, middleName },
   );
 
   return data;

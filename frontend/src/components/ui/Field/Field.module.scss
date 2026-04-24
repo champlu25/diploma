@@ -1,0 +1,71 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.control {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 224, 234, 0.9);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px 12px;
+  font-family: var(--font-family-base);
+  font-size: 0.98rem;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.control:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  background: #ffffff;
+}
+
+.control:disabled {
+  background: rgba(247, 250, 252, 0.9);
+  color: rgba(28, 37, 38, 0.7);
+}
+
+select.control {
+  appearance: none;
+  padding-right: 44px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(71, 85, 105, 0.9) 50%),
+    linear-gradient(135deg, rgba(71, 85, 105, 0.9) 50%, transparent 50%),
+    linear-gradient(to right, rgba(214, 224, 234, 0.65), rgba(214, 224, 234, 0.65));
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%,
+    calc(100% - 38px) 50%;
+  background-size:
+    6px 6px,
+    6px 6px,
+    1px 22px;
+  background-repeat: no-repeat;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.helper {
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+.error {
+  color: #b42318;
+}

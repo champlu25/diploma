@@ -1,0 +1,41 @@
+.page {
+  min-height: 100vh;
+  padding: 28px 20px;
+  background: var(--color-bg-primary);
+}
+
+.card {
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 12px;
+}
+
+.title {
+  font-family: var(--font-family-heading);
+  font-weight: 650;
+  font-size: 1.45rem;
+  letter-spacing: 0.2px;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.container {
+  width: min(520px, 100%);
+  margin: 0 auto;
+}

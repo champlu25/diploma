@@ -1,0 +1,40 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.meta {
+  display: grid;
+  gap: 6px;
+  color: rgba(28, 37, 38, 0.85);
+  font-weight: 500;
+}
+
+.meta strong {
+  color: var(--color-text-primary);
+  font-weight: 900;
+}
+
+.sectionTitle {
+  font-family: var(--font-family-heading);
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: 0.15px;
+  margin: 0 0 12px;
+  color: var(--color-text-primary);
+}
+
+.loadingRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.emptyText {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-top: 10px;
+}

@@ -4,6 +4,9 @@ import type { User, UserRole } from "../types/user";
 interface UserDto {
   id: number;
   email: string;
+  last_name?: string | null;
+  first_name?: string | null;
+  middle_name?: string | null;
   role: UserRole;
   group_lead_user_id?: number | null;
   group_lead_email?: string | null;
@@ -16,6 +19,9 @@ interface UsersResponse {
 const toUser = (dto: UserDto): User => ({
   id: dto.id,
   email: dto.email,
+  lastName: dto.last_name ?? null,
+  firstName: dto.first_name ?? null,
+  middleName: dto.middle_name ?? null,
   role: dto.role,
   groupLeadUserId: dto.group_lead_user_id ?? null,
   groupLeadEmail: dto.group_lead_email ?? null,
@@ -85,12 +91,18 @@ export const assignManagerToGroupLead = async (
 interface GroupManagerDto {
   id: number;
   email: string;
+  last_name?: string | null;
+  first_name?: string | null;
+  middle_name?: string | null;
   companies_count: number;
 }
 
 export interface GroupManager {
   id: number;
   email: string;
+  lastName: string | null;
+  firstName: string | null;
+  middleName: string | null;
   companiesCount: number;
 }
 
@@ -103,6 +115,9 @@ export const getGroupLeadManagers = async (): Promise<GroupManager[]> => {
   return data.managers.map((manager) => ({
     id: manager.id,
     email: manager.email,
+    lastName: manager.last_name ?? null,
+    firstName: manager.first_name ?? null,
+    middleName: manager.middle_name ?? null,
     companiesCount: manager.companies_count,
   }));
 };

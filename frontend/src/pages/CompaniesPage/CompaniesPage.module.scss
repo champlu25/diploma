@@ -1,0 +1,104 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filtersGrow {
+  flex: 0 1 420px;
+  max-width: 520px;
+  min-width: 260px;
+}
+
+.filtersActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filtersActions button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  flex: 0 0 44px;
+}
+
+.filtersActions button > span {
+  width: 22px;
+  height: 22px;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  width: 100%;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.loadingBlock {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.contact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contactDate {
+  font-weight: 500;
+  color: rgba(28, 37, 38, 0.92);
+}
+
+.contactStatus {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  border: 1px solid transparent;
+}
+
+.statusOverdue {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.2);
+  color: #b91c1c;
+}
+
+.statusSoon {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #b45309;
+}
+
+.statusFuture {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: rgba(22, 163, 74, 0.22);
+  color: #15803d;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}

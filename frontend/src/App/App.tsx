@@ -1,14 +1,16 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { getCurrentUser, logout } from "./api/authApi";
-import { AppShell } from "./components/AppShell";
-import { AdminPage } from "./pages/AdminPage";
-import { CompaniesPage } from "./pages/CompaniesPage";
-import { LoginPage } from "./pages/LoginPage";
-import { SetPasswordPage } from "./pages/SetPasswordPage";
-import { UserHomePage } from "./pages/UserHomePage";
-import type { AuthUser } from "./types/user";
-import { getApiErrorMessage } from "./utils/httpError";
+import { getCurrentUser, logout } from "../api/authApi";
+import { AppShell } from "../components/AppShell/AppShell";
+import { AdminPage } from "../pages/AdminPage/AdminPage";
+import { CompaniesPage } from "../pages/CompaniesPage/CompaniesPage";
+import { LoginPage } from "../pages/LoginPage/LoginPage";
+import { SetPasswordPage } from "../pages/SetPasswordPage/SetPasswordPage";
+import { UserHomePage } from "../pages/UserHomePage/UserHomePage";
+import type { AuthUser } from "../types/user";
+import { getApiErrorMessage } from "../utils/httpError";
+import { Spinner } from "../components/ui/Spinner/Spinner";
+import styles from "./App.module.scss";
 
 function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -49,13 +51,20 @@ function App() {
       await logout();
     } finally {
       setCurrentUser(null);
+      setSessionError(null);
     }
+  }, []);
+
+  const handleLogin = useCallback((user: AuthUser) => {
+    setCurrentUser(user);
+    setSessionError(null);
   }, []);
 
   if (isSessionLoading) {
     return (
-      <div className="app-loading">
-        <p className="status">Проверка сессии...</p>
+      <div className={styles.loading}>
+        <Spinner size={28} />
+        <div className={styles.loadingText}>Проверка сессии...</div>
       </div>
     );
   }
@@ -63,14 +72,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/set-password"
-          element={
-            <main className="auth-layout">
-              <SetPasswordPage />
-            </main>
-          }
-        />
+        <Route path="/set-password" element={<SetPasswordPage />} />
 
         <Route
           path="/login"
@@ -78,9 +80,7 @@ function App() {
             currentUser ? (
               <Navigate to="/" replace />
             ) : (
-              <main className="auth-layout">
-                <LoginPage onLogin={setCurrentUser} />
-              </main>
+              <LoginPage onLogin={handleLogin} />
             )
           }
         />
