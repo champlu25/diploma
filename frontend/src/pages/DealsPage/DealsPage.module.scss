@@ -81,44 +81,6 @@
   padding: 18px;
 }
 
-.contact {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.contactDate {
-  font-weight: 500;
-  color: rgba(28, 37, 38, 0.92);
-}
-
-.contactStatus {
-  width: fit-content;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-weight: 600;
-  font-size: 0.78rem;
-  border: 1px solid transparent;
-}
-
-.statusOverdue {
-  background: rgba(220, 38, 38, 0.08);
-  border-color: rgba(220, 38, 38, 0.2);
-  color: #b91c1c;
-}
-
-.statusSoon {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.22);
-  color: #b45309;
-}
-
-.statusFuture {
-  background: rgba(22, 163, 74, 0.12);
-  border-color: rgba(22, 163, 74, 0.22);
-  color: #15803d;
-}
-
 .modalForm {
   display: flex;
   flex-direction: column;

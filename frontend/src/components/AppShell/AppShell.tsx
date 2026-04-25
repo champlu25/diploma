@@ -18,6 +18,7 @@ export function AppShell({ currentUser, onLogout, sessionError }: AppShellProps)
   const homeLabel = currentUser.role === "owner" ? "Пользователи" : "Главная";
   const isHomeActive = location.pathname === "/";
   const isCompaniesActive = location.pathname.startsWith("/companies");
+  const isDealsActive = location.pathname.startsWith("/deals");
   const homeIcon = currentUser.role === "owner" ? "users" : "home";
 
   return (
@@ -36,6 +37,10 @@ export function AppShell({ currentUser, onLogout, sessionError }: AppShellProps)
           >
             <Icon name="companies" size={16} />
             Компании
+          </Link>
+          <Link to="/deals" className={clsx(styles.link, isDealsActive && styles.active)}>
+            <Icon name="deals" size={16} />
+            Сделки
           </Link>
         </nav>
 

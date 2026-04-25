@@ -8,9 +8,11 @@ import logoutSvg from "../../../assets/icons/log-out.svg?raw";
 import refreshCwSvg from "../../../assets/icons/refresh-cw.svg?raw";
 import editSvg from "../../../assets/icons/pencil-fill.svg?raw";
 import deleteSvg from "../../../assets/icons/trash-fill.svg?raw";
+import checkSvg from "../../../assets/icons/check.svg?raw";
 import peopleFillSvg from "../../../assets/icons/people-fill.svg?raw";
 import buildingsFillSvg from "../../../assets/icons/buildings-fill.svg?raw";
 import houseFillSvg from "../../../assets/icons/house-fill.svg?raw";
+import briefcaseFillSvg from "../../../assets/icons/briefcase-fill.svg?raw";
 
 const ICONS = {
   plus: plusSvg,
@@ -18,10 +20,12 @@ const ICONS = {
   search: searchSvg,
   edit: editSvg,
   trash: deleteSvg,
+  check: checkSvg,
   logout: logoutSvg,
   refresh: refreshCwSvg,
   users: peopleFillSvg,
   companies: buildingsFillSvg,
+  deals: briefcaseFillSvg,
   home: houseFillSvg,
 } as const;
 

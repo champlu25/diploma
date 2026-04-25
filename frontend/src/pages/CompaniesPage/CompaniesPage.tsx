@@ -1,18 +1,21 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   createCompany,
   deleteCompany,
   getCompanies,
   updateCompany,
 } from "../../api/companiesApi";
+import { createDeal, getDealLookups } from "../../api/dealsApi";
 import type { Company, CompanyFormValues } from "../../types/company";
+import type { DealFormValues, DealLookups } from "../../types/deal";
 import type { AuthUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
-import { InputField, TextAreaField } from "../../components/ui/Field/Field";
+import { InputField, SelectField, TextAreaField, type SelectFieldOption } from "../../components/ui/Field/Field";
 import { IconButton } from "../../components/ui/IconButton/IconButton";
 import { Icon } from "../../components/ui/Icon/Icon";
 import { Modal } from "../../components/ui/Modal/Modal";
@@ -56,6 +59,61 @@ const validateCompanyForm = (values: CompanyFormValues): CompanyValidationErrors
 };
 
 const hasValidationErrors = (errors: CompanyValidationErrors): boolean =>
+  Object.values(errors).some(Boolean);
+
+type DealValidationErrors = Partial<Record<keyof DealFormValues, string>>;
+
+const emptyDealForm: DealFormValues = {
+  need: "",
+  dealStatusId: "",
+  plCostRub: "",
+  leasingCompanyId: "",
+  advancePercent: "",
+  advanceTotalRub: "",
+  dealStageId: "",
+  comment: "",
+};
+
+const validateDealForm = (values: DealFormValues): DealValidationErrors => {
+  const errors: DealValidationErrors = {};
+
+  if (!values.need.trim()) {
+    errors.need = "Потребность обязательна";
+  }
+
+  if (!values.dealStatusId) {
+    errors.dealStatusId = "Выберите статус";
+  }
+
+  if (!values.leasingCompanyId) {
+    errors.leasingCompanyId = "Выберите лизинговую";
+  }
+
+  if (!values.dealStageId) {
+    errors.dealStageId = "Выберите этап";
+  }
+
+  if (!/^\d+$/.test(values.plCostRub.trim())) {
+    errors.plCostRub = "Укажите стоимость в рублях";
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(values.advancePercent.trim())) {
+    errors.advancePercent = "Укажите процент";
+  } else {
+    const percent = Number(values.advancePercent);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      errors.advancePercent = "0–100";
+    }
+  }
+
+  if (!/^\d+$/.test(values.advanceTotalRub.trim())) {
+    errors.advanceTotalRub = "Укажите сумму в рублях";
+  }
+
+  return errors;
+};
+
+const hasDealValidationErrors = (errors: DealValidationErrors): boolean =>
   Object.values(errors).some(Boolean);
 
 const toDatetimeLocal = (value: string | null): string => {
@@ -160,6 +218,8 @@ const formatContactDate = (dateString: string | null) => {
 };
 
 export function CompaniesPage({ currentUser }: CompaniesPageProps) {
+  const navigate = useNavigate();
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [searchName, setSearchName] = useState("");
   const [searchInn, setSearchInn] = useState("");
@@ -176,6 +236,17 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [editErrors, setEditErrors] = useState<CompanyValidationErrors>({});
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [isDeleteSubmittingId, setIsDeleteSubmittingId] = useState<number | null>(null);
+
+  const [creatingDealCompanyId, setCreatingDealCompanyId] = useState<number | null>(null);
+  const [dealLookups, setDealLookups] = useState<DealLookups | null>(null);
+  const [dealForm, setDealForm] = useState<DealFormValues>(emptyDealForm);
+  const [dealErrors, setDealErrors] = useState<DealValidationErrors>({});
+  const [isDealSubmitting, setIsDealSubmitting] = useState(false);
+
+  const creatingDealCompany = useMemo(
+    () => companies.find((company) => company.id === creatingDealCompanyId) ?? null,
+    [companies, creatingDealCompanyId],
+  );
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -235,7 +306,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     [companies, editingCompanyId],
   );
 
-  const openEditModal = (company: Company) => {
+  const openInlineEdit = (company: Company) => {
     setError(null);
     setEditingCompanyId(company.id);
     setEditForm({
@@ -250,14 +321,13 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setEditErrors({});
   };
 
-  const closeEditModal = () => {
+  const cancelInlineEdit = () => {
     setEditingCompanyId(null);
     setEditForm(emptyForm);
     setEditErrors({});
   };
 
-  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleInlineSave = async () => {
     if (!editingCompany) {
       return;
     }
@@ -274,11 +344,63 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setError(null);
       const result = await updateCompany(editingCompany.id, editForm);
       setCompanies((prev) => prev.map((item) => (item.id === editingCompany.id ? result.company : item)));
-      closeEditModal();
+      cancelInlineEdit();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить компанию."));
     } finally {
       setIsEditSubmitting(false);
+    }
+  };
+
+  const ensureDealLookups = useCallback(async () => {
+    if (dealLookups) {
+      return;
+    }
+
+    try {
+      const data = await getDealLookups();
+      setDealLookups(data);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "Не удалось загрузить справочники сделок."));
+    }
+  }, [dealLookups]);
+
+  const openCreateDealModal = (company: Company) => {
+    setError(null);
+    setDealForm(emptyDealForm);
+    setDealErrors({});
+    setCreatingDealCompanyId(company.id);
+    void ensureDealLookups();
+  };
+
+  const closeCreateDealModal = () => {
+    if (isDealSubmitting) return;
+    setCreatingDealCompanyId(null);
+    setDealForm(emptyDealForm);
+    setDealErrors({});
+  };
+
+  const handleCreateDealSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!creatingDealCompany) return;
+
+    const validationErrors = validateDealForm(dealForm);
+    setDealErrors(validationErrors);
+    if (hasDealValidationErrors(validationErrors)) {
+      setError("Проверьте поля формы.");
+      return;
+    }
+
+    try {
+      setIsDealSubmitting(true);
+      setError(null);
+      await createDeal(creatingDealCompany.id, dealForm);
+      closeCreateDealModal();
+      navigate("/deals");
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "Не удалось создать сделку."));
+    } finally {
+      setIsDealSubmitting(false);
     }
   };
 
@@ -307,6 +429,30 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     company.ownerUserId === currentUser.id;
 
   const showManagerColumn = currentUser.role !== "manager";
+
+  const dealStatusOptions = useMemo(() => {
+    const base: SelectFieldOption[] = [{ value: "", label: "Выберите статус", disabled: true }];
+    if (!dealLookups) return base;
+    return base.concat(
+      dealLookups.dealStatuses.map((item) => ({ value: String(item.id), label: item.name })),
+    );
+  }, [dealLookups]);
+
+  const leasingOptions = useMemo(() => {
+    const base: SelectFieldOption[] = [{ value: "", label: "Выберите лизинговую", disabled: true }];
+    if (!dealLookups) return base;
+    return base.concat(
+      dealLookups.leasingCompanies.map((item) => ({ value: String(item.id), label: item.name })),
+    );
+  }, [dealLookups]);
+
+  const stageOptions = useMemo(() => {
+    const base: SelectFieldOption[] = [{ value: "", label: "Выберите этап", disabled: true }];
+    if (!dealLookups) return base;
+    return base.concat(
+      dealLookups.dealStages.map((item) => ({ value: String(item.id), label: item.name })),
+    );
+  }, [dealLookups]);
 
   return (
     <div className={styles.page}>
@@ -389,22 +535,114 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               const canManage = canManageCompany(company);
               const isDeleteSubmitting = isDeleteSubmittingId === company.id;
               const contact = formatContactDate(company.nextContactAt);
+              const isEditing = company.id === editingCompanyId;
 
-                return (
-                  <Tr key={company.id}>
-                    <Td>{company.name}</Td>
-                    {showManagerColumn && <Td>{company.ownerEmail}</Td>}
-                    <Td>{company.inn}</Td>
-                    <Td>{company.contactName || "—"}</Td>
-                    <Td>{company.phone || "—"}</Td>
-                    <Td>{company.email || "—"}</Td>
-                    <Td>{company.comment || "—"}</Td>
-                    <Td>
-                      {contact.text === "—" ? (
-                        <span className={styles.muted}>—</span>
-                      ) : (
-                        <div className={styles.contact}>
-                          <div className={styles.contactDate}>{contact.text}</div>
+              return (
+                <Tr key={company.id}>
+                  <Td>
+                    {isEditing ? (
+                      <input
+                        className={`${styles.cellInput} ${editErrors.name ? styles.cellError : ""}`}
+                        value={editForm.name}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+                        disabled={isEditSubmitting}
+                        required
+                        aria-invalid={Boolean(editErrors.name) || undefined}
+                        title={editErrors.name}
+                      />
+                    ) : (
+                      company.name
+                    )}
+                  </Td>
+
+                  {showManagerColumn && <Td>{company.ownerEmail}</Td>}
+
+                  <Td>
+                    {isEditing ? (
+                      <input
+                        className={`${styles.cellInput} ${editErrors.inn ? styles.cellError : ""}`}
+                        value={editForm.inn}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, inn: event.target.value }))}
+                        disabled={isEditSubmitting}
+                        required
+                        inputMode="numeric"
+                        aria-invalid={Boolean(editErrors.inn) || undefined}
+                        title={editErrors.inn}
+                      />
+                    ) : (
+                      company.inn
+                    )}
+                  </Td>
+
+                  <Td>
+                    {isEditing ? (
+                      <input
+                        className={styles.cellInput}
+                        value={editForm.contactName}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, contactName: event.target.value }))}
+                        disabled={isEditSubmitting}
+                      />
+                    ) : (
+                      company.contactName || "—"
+                    )}
+                  </Td>
+
+                  <Td>
+                    {isEditing ? (
+                      <input
+                        className={styles.cellInput}
+                        value={editForm.phone}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
+                        disabled={isEditSubmitting}
+                      />
+                    ) : (
+                      company.phone || "—"
+                    )}
+                  </Td>
+
+                  <Td>
+                    {isEditing ? (
+                      <input
+                        className={`${styles.cellInput} ${editErrors.email ? styles.cellError : ""}`}
+                        value={editForm.email}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
+                        disabled={isEditSubmitting}
+                        aria-invalid={Boolean(editErrors.email) || undefined}
+                        title={editErrors.email}
+                      />
+                    ) : (
+                      company.email || "—"
+                    )}
+                  </Td>
+
+                  <Td>
+                    {isEditing ? (
+                      <textarea
+                        className={styles.cellTextarea}
+                        value={editForm.comment}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
+                        disabled={isEditSubmitting}
+                        rows={2}
+                      />
+                    ) : (
+                      company.comment || "—"
+                    )}
+                  </Td>
+
+                  <Td>
+                    {isEditing ? (
+                      <input
+                        className={styles.cellInput}
+                        type="datetime-local"
+                        value={editForm.nextContactAt}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
+                        disabled={isEditSubmitting}
+                      />
+                    ) : contact.text === "—" ? (
+                      <span className={styles.muted}>—</span>
+                    ) : (
+                      <div className={styles.contact}>
+                        <div className={styles.contactDate}>{contact.text}</div>
                         {contact.statusText && contact.tone && (
                           <div
                             className={`${styles.contactStatus} ${
@@ -419,34 +657,57 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                           </div>
                         )}
                       </div>
-                      )}
-                    </Td>
-                    <Td style={{ textAlign: "center" }}>
-                      {canManage ? (
-                        <div className={styles.actions}>
-                          <IconButton tone="neutral" onClick={() => openEditModal(company)} title="Редактировать">
-                            <Icon name="edit" size={20} />
-                          </IconButton>
-                          <IconButton
-                            onClick={() => void handleDelete(company)}
-                            disabled={isDeleteSubmitting}
-                            title="Удалить"
-                            tone="danger"
-                          >
-                            {isDeleteSubmitting ? (
-                              <Spinner size={18} />
-                            ) : (
-                              <Icon name="trash" size={20} />
-                            )}
-                          </IconButton>
-                        </div>
-                      ) : (
-                        <span className={styles.muted}>—</span>
-                      )}
-                    </Td>
-                  </Tr>
-                );
-              })}
+                    )}
+                  </Td>
+
+                  <Td style={{ textAlign: "center" }}>
+                    {canManage ? (
+                      <div className={styles.actions}>
+                        {isEditing ? (
+                          <>
+                            <IconButton
+                              tone="neutral"
+                              onClick={() => void handleInlineSave()}
+                              disabled={isEditSubmitting}
+                              title="Сохранить"
+                            >
+                              {isEditSubmitting ? <Spinner size={18} /> : <Icon name="check" size={18} />}
+                            </IconButton>
+                            <IconButton
+                              tone="neutral"
+                              onClick={cancelInlineEdit}
+                              disabled={isEditSubmitting}
+                              title="Отменить"
+                            >
+                              <Icon name="x" size={18} />
+                            </IconButton>
+                          </>
+                        ) : (
+                          <>
+                            <IconButton tone="neutral" onClick={() => openCreateDealModal(company)} title="Создать сделку">
+                              <Icon name="deals" size={18} />
+                            </IconButton>
+                            <IconButton tone="neutral" onClick={() => openInlineEdit(company)} title="Редактировать">
+                              <Icon name="edit" size={18} />
+                            </IconButton>
+                            <IconButton
+                              onClick={() => void handleDelete(company)}
+                              disabled={isDeleteSubmitting}
+                              title="Удалить"
+                              tone="danger"
+                            >
+                              {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
+                            </IconButton>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <span className={styles.muted}>—</span>
+                    )}
+                  </Td>
+                </Tr>
+              );
+            })}
 
               {filteredCompanies.length === 0 && (
                 <Tr>
@@ -539,69 +800,94 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         </form>
       </Modal>
 
-      <Modal open={Boolean(editingCompany)} title="Редактировать компанию" onClose={closeEditModal}>
-        {editingCompany && (
-          <form className={styles.modalForm} onSubmit={handleEditSubmit}>
-            <InputField
-              label="Наименование"
-              value={editForm.name}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+      <Modal open={Boolean(creatingDealCompany)} title="Создать сделку" onClose={closeCreateDealModal}>
+        {creatingDealCompany && (
+          <form className={styles.modalForm} onSubmit={handleCreateDealSubmit}>
+            <InputField label="Компания" value={creatingDealCompany.name} disabled />
+            <InputField label="ИНН" value={creatingDealCompany.inn} disabled />
+            <InputField label="Менеджер" value={creatingDealCompany.ownerEmail} disabled />
+
+            <TextAreaField
+              label="Потребность"
+              value={dealForm.need}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, need: event.target.value }))}
               required
-              error={editErrors.name}
-              disabled={isEditSubmitting}
+              error={dealErrors.need}
+              disabled={isDealSubmitting}
+              rows={3}
+            />
+
+            <SelectField
+              label="Статус"
+              value={dealForm.dealStatusId}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, dealStatusId: event.target.value }))}
+              required
+              error={dealErrors.dealStatusId}
+              disabled={isDealSubmitting || !dealLookups}
+              options={dealStatusOptions}
             />
 
             <InputField
-              label="ИНН"
-              value={editForm.inn}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, inn: event.target.value }))}
+              label="Стоимость ПЛ, ₽"
+              value={dealForm.plCostRub}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, plCostRub: event.target.value }))}
               required
-              error={editErrors.inn}
-              disabled={isEditSubmitting}
+              error={dealErrors.plCostRub}
+              disabled={isDealSubmitting}
               inputMode="numeric"
             />
 
-            <InputField
-              label="Контактное лицо"
-              value={editForm.contactName || ""}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, contactName: event.target.value }))}
-              disabled={isEditSubmitting}
+            <SelectField
+              label="Лизинговая"
+              value={dealForm.leasingCompanyId}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))}
+              required
+              error={dealErrors.leasingCompanyId}
+              disabled={isDealSubmitting || !dealLookups}
+              options={leasingOptions}
             />
 
             <InputField
-              label="Телефон"
-              value={editForm.phone || ""}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
-              disabled={isEditSubmitting}
+              label="АВ, %"
+              value={dealForm.advancePercent}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, advancePercent: event.target.value }))}
+              required
+              error={dealErrors.advancePercent}
+              disabled={isDealSubmitting}
+              inputMode="decimal"
             />
 
-              <InputField
-                label="Почта"
-                value={editForm.email || ""}
-                onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
-                error={editErrors.email}
-                disabled={isEditSubmitting}
-              />
+            <InputField
+              label="Общий АВ, ₽"
+              value={dealForm.advanceTotalRub}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, advanceTotalRub: event.target.value }))}
+              required
+              error={dealErrors.advanceTotalRub}
+              disabled={isDealSubmitting}
+              inputMode="numeric"
+            />
 
-              <InputField
-                label="Связаться"
-                type="datetime-local"
-                value={editForm.nextContactAt || ""}
-                onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
-                disabled={isEditSubmitting}
-              />
+            <SelectField
+              label="Этап сделки"
+              value={dealForm.dealStageId}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, dealStageId: event.target.value }))}
+              required
+              error={dealErrors.dealStageId}
+              disabled={isDealSubmitting || !dealLookups}
+              options={stageOptions}
+            />
 
-              <TextAreaField
-                label="Комментарий"
-                value={editForm.comment || ""}
-                onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
-                disabled={isEditSubmitting}
-                rows={4}
-              />
+            <TextAreaField
+              label="Комментарий"
+              value={dealForm.comment}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, comment: event.target.value }))}
+              disabled={isDealSubmitting}
+              rows={3}
+            />
 
             <div className={styles.modalActions}>
-              <Button type="submit" disabled={isEditSubmitting}>
-                {isEditSubmitting ? <Spinner size={20} /> : "Сохранить"}
+              <Button type="submit" disabled={isDealSubmitting}>
+                {isDealSubmitting ? <Spinner size={20} /> : "Создать"}
               </Button>
             </div>
           </form>
