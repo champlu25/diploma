@@ -587,6 +587,44 @@ app.get("/api/companies", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/users/transfer-targets", requireAuth, async (req, res) => {
+  if (req.auth.role !== "owner" && req.auth.role !== "group_lead") {
+    res.status(403).json({
+      message: "Требуются права руководителя группы или владельца.",
+    });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          u.id,
+          u.email,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
+          r.name AS role,
+          u.group_lead_user_id,
+          gl.email AS group_lead_email
+        FROM users AS u
+        JOIN roles AS r ON r.id = u.role_id
+        LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
+        ORDER BY u.id ASC
+      `
+    );
+
+    res.status(200).json({
+      users: result.rows,
+    });
+  } catch (error) {
+    console.error("Не удалось получить список пользователей для передачи:", error);
+    res.status(500).json({
+      message: "Не удалось получить список пользователей.",
+    });
+  }
+});
+
 app.get("/api/group-lead/managers", requireAuth, async (req, res) => {
   const currentUserId = Number(req.auth.sub);
 
@@ -1030,6 +1068,126 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
     console.error("Не удалось обновить компанию:", error);
     res.status(500).json({
       message: "Не удалось обновить компанию.",
+    });
+  }
+});
+
+app.post("/api/companies/:companyId/transfer", requireAuth, async (req, res) => {
+  if (req.auth.role !== "owner" && req.auth.role !== "group_lead") {
+    res.status(403).json({
+      message: "Требуются права руководителя группы или владельца.",
+    });
+    return;
+  }
+
+  const companyId = parseUserId(req.params?.companyId);
+  const currentUserId = Number(req.auth.sub);
+  const targetUserId = parseUserId(req.body?.targetUserId);
+
+  if (!companyId) {
+    res.status(400).json({
+      message: "Некорректный companyId.",
+    });
+    return;
+  }
+
+  if (!targetUserId) {
+    res.status(400).json({
+      message: "Некорректный targetUserId.",
+    });
+    return;
+  }
+
+  try {
+    const targetUserResult = await pool.query(
+      `
+        SELECT id
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [targetUserId]
+    );
+
+    if (targetUserResult.rowCount === 0) {
+      res.status(404).json({
+        message: "Пользователь-получатель не найден.",
+      });
+      return;
+    }
+
+    const companyResult = await pool.query(
+      `
+        SELECT
+          c.id,
+          c.owner_user_id,
+          CASE
+            WHEN $2 = 'owner' THEN TRUE
+            WHEN $2 = 'group_lead' AND (
+              c.owner_user_id = $1
+              OR EXISTS (
+                SELECT 1
+                FROM users AS u
+                JOIN roles AS r ON r.id = u.role_id
+                WHERE u.id = c.owner_user_id
+                  AND u.group_lead_user_id = $1
+                  AND r.name = 'manager'
+              )
+            ) THEN TRUE
+            ELSE FALSE
+          END AS can_transfer
+        FROM companies AS c
+        WHERE c.id = $3
+        LIMIT 1
+      `,
+      [currentUserId, req.auth.role, companyId]
+    );
+
+    if (companyResult.rowCount === 0) {
+      res.status(404).json({
+        message: "Компания не найдена.",
+      });
+      return;
+    }
+
+    const company = companyResult.rows[0];
+    if (!company.can_transfer) {
+      res.status(404).json({
+        message: "Компания не найдена.",
+      });
+      return;
+    }
+
+    const updateResult = await pool.query(
+      `
+        UPDATE companies
+        SET owner_user_id = $1
+        WHERE id = $2
+        RETURNING
+          id,
+          owner_user_id,
+          (SELECT email FROM users WHERE id = owner_user_id) AS owner_email,
+          name,
+          inn,
+          contact_name,
+          phone,
+          email,
+          comment,
+          next_contact_at,
+          created_at,
+          updated_at
+      `,
+      [targetUserId, companyId]
+    );
+
+    res.status(200).json({
+      message: "Компания передана.",
+      company: updateResult.rows[0],
+    });
+  } catch (error) {
+    console.error("Не удалось передать компанию:", error);
+    res.status(500).json({
+      message: "Не удалось передать компанию.",
     });
   }
 });

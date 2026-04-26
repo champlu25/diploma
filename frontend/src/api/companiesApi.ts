@@ -90,3 +90,18 @@ export const deleteCompany = async (companyId: number): Promise<DeleteCompanyRes
   const { data } = await httpClient.delete<DeleteCompanyResponse>(`/api/companies/${companyId}`);
   return data;
 };
+
+export const transferCompany = async (
+  companyId: number,
+  targetUserId: number,
+): Promise<CompanyResponse> => {
+  const { data } = await httpClient.post<CompanyDtoResponse>(
+    `/api/companies/${companyId}/transfer`,
+    { targetUserId },
+  );
+
+  return {
+    ...data,
+    company: toCompany(data.company),
+  };
+};

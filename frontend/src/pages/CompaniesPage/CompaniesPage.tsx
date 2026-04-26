@@ -4,12 +4,14 @@ import {
   createCompany,
   deleteCompany,
   getCompanies,
+  transferCompany,
   updateCompany,
 } from "../../api/companiesApi";
 import { createDeal, getDealLookups } from "../../api/dealsApi";
+import { getTransferTargets } from "../../api/usersApi";
 import type { Company, CompanyFormValues } from "../../types/company";
 import type { DealFormValues, DealLookups } from "../../types/deal";
-import type { AuthUser } from "../../types/user";
+import type { AuthUser, User } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
@@ -243,6 +245,12 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [dealErrors, setDealErrors] = useState<DealValidationErrors>({});
   const [isDealSubmitting, setIsDealSubmitting] = useState(false);
 
+  const [transferTargets, setTransferTargets] = useState<User[] | null>(null);
+  const [transferCompanyCandidate, setTransferCompanyCandidate] = useState<Company | null>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isTransferSubmitting, setIsTransferSubmitting] = useState(false);
+  const [transferTargetUserId, setTransferTargetUserId] = useState("");
+
   const creatingDealCompany = useMemo(
     () => companies.find((company) => company.id === creatingDealCompanyId) ?? null,
     [companies, creatingDealCompanyId],
@@ -420,6 +428,76 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setError(getApiErrorMessage(requestError, "Не удалось удалить компанию."));
     } finally {
       setIsDeleteSubmittingId(null);
+    }
+  };
+
+  const canTransferCompanies = currentUser.role === "owner" || currentUser.role === "group_lead";
+
+  const formatTransferTargetLabel = (user: User): string => {
+    const name = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ");
+    if (!name) {
+      return user.email;
+    }
+
+    return `${name} (${user.email})`;
+  };
+
+  const openTransferModal = async (company: Company) => {
+    if (!canTransferCompanies) {
+      return;
+    }
+
+    setError(null);
+    setTransferCompanyCandidate(company);
+    setTransferTargetUserId(String(company.ownerUserId));
+    setIsTransferModalOpen(true);
+
+    if (transferTargets) {
+      return;
+    }
+
+    try {
+      const targets = await getTransferTargets();
+      setTransferTargets(targets);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "Не удалось загрузить список пользователей."));
+    }
+  };
+
+  const closeTransferModal = (force = false) => {
+    if (isTransferSubmitting && !force) {
+      return;
+    }
+
+    setIsTransferModalOpen(false);
+    setTransferCompanyCandidate(null);
+    setTransferTargetUserId("");
+  };
+
+  const handleTransferSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!transferCompanyCandidate) {
+      return;
+    }
+
+    const targetUserId = Number(transferTargetUserId);
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      setError("Выберите пользователя для передачи.");
+      return;
+    }
+
+    setError(null);
+
+    try {
+      setIsTransferSubmitting(true);
+      await transferCompany(transferCompanyCandidate.id, targetUserId);
+      closeTransferModal(true);
+      await loadCompanies();
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "Не удалось передать компанию."));
+    } finally {
+      setIsTransferSubmitting(false);
     }
   };
 
@@ -665,6 +743,11 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                       <div className={styles.actions}>
                         {isEditing ? (
                           <>
+                            {canTransferCompanies && (
+                              <IconButton tone="neutral" onClick={() => void openTransferModal(company)} title="Передать">
+                                <Icon name="users" size={18} />
+                              </IconButton>
+                            )}
                             <IconButton
                               tone="neutral"
                               onClick={() => void handleInlineSave()}
@@ -690,6 +773,11 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                             <IconButton tone="neutral" onClick={() => openInlineEdit(company)} title="Редактировать">
                               <Icon name="edit" size={18} />
                             </IconButton>
+                            {canTransferCompanies && (
+                              <IconButton tone="neutral" onClick={() => void openTransferModal(company)} title="Передать">
+                                <Icon name="users" size={18} />
+                              </IconButton>
+                            )}
                             <IconButton
                               onClick={() => void handleDelete(company)}
                               disabled={isDeleteSubmitting}
@@ -800,13 +888,13 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         </form>
       </Modal>
 
-      <Modal open={Boolean(creatingDealCompany)} title="Создать сделку" onClose={closeCreateDealModal}>
+      <Modal
+        open={Boolean(creatingDealCompany)}
+        title={creatingDealCompany ? `Создать сделку — ${creatingDealCompany.name}` : "Создать сделку"}
+        onClose={closeCreateDealModal}
+      >
         {creatingDealCompany && (
           <form className={styles.modalForm} onSubmit={handleCreateDealSubmit}>
-            <InputField label="Компания" value={creatingDealCompany.name} disabled />
-            <InputField label="ИНН" value={creatingDealCompany.inn} disabled />
-            <InputField label="Менеджер" value={creatingDealCompany.ownerEmail} disabled />
-
             <TextAreaField
               label="Потребность"
               value={dealForm.need}
@@ -814,7 +902,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               required
               error={dealErrors.need}
               disabled={isDealSubmitting}
-              rows={3}
+              rows={2}
             />
 
             <SelectField
@@ -882,7 +970,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               value={dealForm.comment}
               onChange={(event) => setDealForm((prev) => ({ ...prev, comment: event.target.value }))}
               disabled={isDealSubmitting}
-              rows={3}
+              rows={2}
             />
 
             <div className={styles.modalActions}>
@@ -892,6 +980,35 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             </div>
           </form>
         )}
+      </Modal>
+
+      <Modal open={isTransferModalOpen} title="Передать компанию" onClose={closeTransferModal}>
+        <form className={styles.modalForm} onSubmit={handleTransferSubmit}>
+          <InputField label="Компания" value={transferCompanyCandidate?.name ?? ""} disabled />
+          <InputField label="ИНН" value={transferCompanyCandidate?.inn ?? ""} disabled />
+          <InputField label="Текущий владелец" value={transferCompanyCandidate?.ownerEmail ?? ""} disabled />
+
+          <SelectField
+            label="Передать пользователю"
+            value={transferTargetUserId}
+            onChange={(event) => setTransferTargetUserId(event.target.value)}
+            required
+            disabled={isTransferSubmitting || !transferTargets}
+            options={[
+              { value: "", label: "Выберите пользователя", disabled: true },
+              ...(transferTargets ?? []).map((user) => ({
+                value: String(user.id),
+                label: formatTransferTargetLabel(user),
+              })),
+            ]}
+          />
+
+          <div className={styles.modalActions}>
+            <Button type="submit" disabled={isTransferSubmitting || !transferTargets}>
+              {isTransferSubmitting ? <Spinner size={20} /> : "Передать"}
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

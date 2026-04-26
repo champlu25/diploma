@@ -122,6 +122,15 @@ export const getGroupLeadManagers = async (): Promise<GroupManager[]> => {
   }));
 };
 
+interface TransferTargetsResponse {
+  users: UserDto[];
+}
+
+export const getTransferTargets = async (): Promise<User[]> => {
+  const { data } = await httpClient.get<TransferTargetsResponse>("/api/users/transfer-targets");
+  return data.users.map(toUser);
+};
+
 interface OwnerPasswordLinkResponse {
   message: string;
   setupLink: string;
