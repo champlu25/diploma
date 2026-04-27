@@ -17,7 +17,7 @@ interface LoginPageProps {
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,15 +25,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!email.trim() || !password) {
-      setError("Введите email и пароль.");
+    if (!username.trim() || !password) {
+      setError("Введите логин и пароль.");
       return;
     }
 
     try {
       setIsSubmitting(true);
       setError(null);
-      const user = await login(email.trim(), password);
+      const user = await login(username.trim(), password);
       onLogin(user);
       navigate("/", { replace: true });
     } catch (requestError) {
@@ -49,19 +49,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         <Card>
           <div className={styles.header}>
             <h1 className={styles.title}>Вход</h1>
-            <p className={styles.subtitle}>Введите рабочий email и пароль.</p>
+            <p className={styles.subtitle}>Введите логин и пароль.</p>
           </div>
 
           <Divider />
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
             <InputField
-              label="Эл. почта"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              label="Логин"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
-              placeholder="employee@company.com"
+              placeholder="например: ivanov"
               disabled={isSubmitting}
               required
             />

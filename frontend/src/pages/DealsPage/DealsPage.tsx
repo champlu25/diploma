@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { deleteDeal, getDealLookups, getDeals, updateDeal } from "../../api/dealsApi";
+import {
+  deleteDeal,
+  getDealLookups,
+  getDeals,
+  updateDeal,
+  updateDealLifecycleStatus,
+} from "../../api/dealsApi";
 import type { Deal, DealFormValues, DealLookups } from "../../types/deal";
 import type { AuthUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
@@ -110,6 +116,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedLifecycleStatusId, setSelectedLifecycleStatusId] = useState<number | null>(null);
+  const [isLifecycleSubmittingId, setIsLifecycleSubmittingId] = useState<number | null>(null);
+
   const [searchCompanyName, setSearchCompanyName] = useState("");
   const [searchInn, setSearchInn] = useState("");
 
@@ -140,7 +149,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     (deal: Deal): boolean =>
       currentUser.role === "owner" ||
       currentUser.role === "group_lead" ||
-      deal.companyOwnerUserId === currentUser.id,
+      deal.companyManagerUserId === currentUser.id,
     [currentUser],
   );
 
@@ -149,6 +158,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     const queryInn = searchInn.trim();
 
     return deals.filter((deal) => {
+      if (selectedLifecycleStatusId && deal.dealLifecycleStatusId !== selectedLifecycleStatusId) {
+        return false;
+      }
       if (queryName && !deal.companyName.toLowerCase().includes(queryName)) {
         return false;
       }
@@ -157,7 +169,15 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       }
       return true;
     });
-  }, [deals, searchCompanyName, searchInn]);
+  }, [deals, searchCompanyName, searchInn, selectedLifecycleStatusId]);
+
+  const selectedLifecycleStatusName = useMemo(() => {
+    if (!lookups || !selectedLifecycleStatusId) return null;
+    return lookups.dealLifecycleStatuses.find((item) => item.id === selectedLifecycleStatusId)?.name ?? null;
+  }, [lookups, selectedLifecycleStatusId]);
+
+  const showCompletionColumn = selectedLifecycleStatusName !== null && selectedLifecycleStatusName !== "Активные";
+  const tableColSpan = showCompletionColumn ? 12 : 11;
 
   const loadDeals = useCallback(async () => {
     try {
@@ -177,6 +197,20 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   useEffect(() => {
     void loadDeals();
   }, [loadDeals]);
+
+  useEffect(() => {
+    if (!lookups) return;
+
+    if (selectedLifecycleStatusId) {
+      const exists = lookups.dealLifecycleStatuses.some((item) => item.id === selectedLifecycleStatusId);
+      if (exists) {
+        return;
+      }
+    }
+
+    const active = lookups.dealLifecycleStatuses.find((item) => item.name === "Активные");
+    setSelectedLifecycleStatusId(active?.id ?? lookups.dealLifecycleStatuses[0]?.id ?? null);
+  }, [lookups, selectedLifecycleStatusId]);
 
   const openInlineEdit = (deal: Deal) => {
     setError(null);
@@ -299,6 +333,29 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     }
   };
 
+  const handleLifecycleStatusChange = async (deal: Deal, nextValue: string) => {
+    const parsed = Number(nextValue);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return;
+    }
+
+    if (parsed === deal.dealLifecycleStatusId) {
+      return;
+    }
+
+    try {
+      setIsLifecycleSubmittingId(deal.id);
+      setError(null);
+
+      const result = await updateDealLifecycleStatus(deal.id, parsed);
+      setDeals((prev) => prev.map((item) => (item.id === deal.id ? result.deal : item)));
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "Не удалось изменить статус сделки."));
+    } finally {
+      setIsLifecycleSubmittingId(null);
+    }
+  };
+
   return (
     <div className={styles.page}>
       <PageHeader title="Сделки" subtitle="Воронка, расчёты и сопровождение." />
@@ -323,19 +380,31 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             inputMode="numeric"
           />
         </div>
-        <div className={styles.filtersActions}>
-          <IconButton onClick={() => void loadDeals()} title="Обновить">
-            <Icon name="refresh" size={18} />
-          </IconButton>
-        </div>
+        <div className={styles.filtersActions} />
       </div>
+
+      {lookups && selectedLifecycleStatusId && (
+        <nav className={styles.statusNav} aria-label="Статусы сделок">
+          {lookups.dealLifecycleStatuses.map((status) => (
+            <button
+              key={status.id}
+              type="button"
+              className={`${styles.statusLink} ${status.id === selectedLifecycleStatusId ? styles.statusActive : ""}`}
+              onClick={() => setSelectedLifecycleStatusId(status.id)}
+              disabled={isLoading}
+            >
+              {status.name}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <DataTable>
         <thead>
           <Tr>
-            <Th style={{ width: "20%" }}>Компания</Th>
-            <Th style={{ width: "10%" }}>ИНН</Th>
-            <Th style={{ width: "9%" }}>Статус</Th>
+	            <Th style={{ width: "16%" }}>Компания</Th>
+	            <Th style={{ width: "9%" }}>ИНН</Th>
+	            <Th style={{ width: "10%" }}>Статус</Th>
             <Th style={{ width: "11%" }}>Стоимость ПЛ</Th>
             <Th style={{ width: "11%" }}>Лизинговая</Th>
             <Th style={{ width: "7%" }}>АВ, %</Th>
@@ -343,7 +412,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <Th style={{ width: "14%" }}>Этап сделки</Th>
             <Th style={{ width: "13%" }}>Менеджер</Th>
             <Th style={{ width: "12%" }}>Создание</Th>
-            <Th style={{ width: "8%", textAlign: "left" }}>Действия</Th>
+            {showCompletionColumn && <Th style={{ width: "12%" }}>Завершение</Th>}
+	            <Th style={{ width: "12%", textAlign: "left" }}>Действия</Th>
           </Tr>
         </thead>
         <tbody>
@@ -351,6 +421,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             const canManage = canManageDeal(deal);
             const isDeleteSubmitting = isDeleteSubmittingId === deal.id;
             const isEditing = deal.id === editingDealId;
+            const isStatusSubmitting = isLifecycleSubmittingId === deal.id;
 
             return (
               <Tr key={deal.id}>
@@ -470,13 +541,16 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                       deal.dealStageName
                     )}
                   </Td>
-                  <Td>{deal.managerEmail}</Td>
+	                  <Td>{deal.managerName}</Td>
                   <Td>{formatDateTime(deal.createdAt)}</Td>
+                  {showCompletionColumn && (
+                    <Td>{deal.completedAt ? formatDateTime(deal.completedAt) : <span className={styles.muted}>—</span>}</Td>
+                  )}
                   <Td style={{ textAlign: "center" }}>
                     {canManage ? (
                       <div className={styles.actions}>
                         {isEditing ? (
-                          <>
+                          <div className={styles.actionButtons}>
                             <IconButton
                               tone="neutral"
                               onClick={() => void handleInlineSave()}
@@ -493,39 +567,64 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                             >
                               <Icon name="x" size={18} />
                             </IconButton>
-                          </>
-                        ) : (
-                          <>
-                            <IconButton
-                              tone="neutral"
-                              onClick={() => openDetailsModal(deal)}
-                              title="Потребность и комментарий"
-                              disabled={Boolean(editingDealId)}
+                          </div>
+	                        ) : (
+	                          <>
+	                            <div className={styles.actionButtons}>
+	                              <IconButton
+	                                tone="neutral"
+                                onClick={() => openDetailsModal(deal)}
+                                title="Потребность и комментарий"
+                                disabled={Boolean(editingDealId)}
+                              >
+                                <Icon name="search" size={18} />
+                              </IconButton>
+                              <IconButton
+                                tone="neutral"
+                                onClick={() => openInlineEdit(deal)}
+                                title="Редактировать"
+                                disabled={!lookups}
+                              >
+                                <Icon name="edit" size={18} />
+                              </IconButton>
+                              <IconButton
+                                onClick={() => void handleDelete(deal)}
+                                disabled={isDeleteSubmitting}
+                                title="Удалить"
+                                tone="danger"
+                              >
+                                {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
+	                              </IconButton>
+	                            </div>
+                            <select
+                              className={styles.actionSelect}
+                              value=""
+                              onChange={(event) => void handleLifecycleStatusChange(deal, event.target.value)}
+                              disabled={
+                                isStatusSubmitting ||
+                                Boolean(editingDealId) ||
+                                !lookups ||
+                                lookups.dealLifecycleStatuses.length === 0
+                              }
+                              title="Результат"
                             >
-                              <Icon name="search" size={18} />
-                            </IconButton>
-                            <IconButton
-                              tone="neutral"
-                              onClick={() => openInlineEdit(deal)}
-                              title="Редактировать"
-                              disabled={!lookups}
-                            >
-                              <Icon name="edit" size={18} />
-                            </IconButton>
-                            <IconButton
-                              onClick={() => void handleDelete(deal)}
-                              disabled={isDeleteSubmitting}
-                              title="Удалить"
-                              tone="danger"
-                            >
-                              {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
-                            </IconButton>
+                              <option value="" disabled>
+                                Результат
+                              </option>
+                              {(lookups?.dealLifecycleStatuses ?? [])
+                                .filter((item) => item.id !== deal.dealLifecycleStatusId)
+                                .map((item) => (
+                                  <option key={item.id} value={String(item.id)}>
+                                    {item.name}
+                                  </option>
+                                ))}
+                            </select>
                           </>
                         )}
                       </div>
                     ) : (
                       <span className={styles.muted}>—</span>
-                    )}
+                  )}
                   </Td>
                 </Tr>
             );
@@ -533,7 +632,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
           {filteredDeals.length === 0 && (
             <Tr>
-              <Td colSpan={11} style={{ textAlign: "center" }}>
+              <Td colSpan={tableColSpan} style={{ textAlign: "center" }}>
                 <span className={styles.muted}>Сделок нет</span>
               </Td>
             </Tr>
@@ -555,10 +654,6 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         {detailsDeal && (
           <div className={styles.modalForm}>
             {detailsError && <Alert tone="error">{detailsError}</Alert>}
-            <InputField label="Компания" value={detailsDeal.companyName} disabled />
-            <InputField label="ИНН" value={detailsDeal.companyInn} disabled />
-            <InputField label="Менеджер" value={detailsDeal.managerEmail} disabled />
-
             <TextAreaField
               label="Потребность"
               value={detailsNeed}

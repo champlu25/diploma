@@ -3,8 +3,8 @@ import type { Company, CompanyFormValues } from "../types/company";
 
 interface CompanyDto {
   id: number;
-  owner_user_id: number;
-  owner_email: string;
+  manager_user_id: number;
+  manager_name: string;
   name: string;
   inn: string;
   contact_name: string | null;
@@ -36,8 +36,8 @@ interface CompanyResponse {
 
 const toCompany = (dto: CompanyDto): Company => ({
   id: dto.id,
-  ownerUserId: dto.owner_user_id,
-  ownerEmail: dto.owner_email,
+  managerUserId: dto.manager_user_id,
+  managerName: dto.manager_name,
   name: dto.name,
   inn: dto.inn,
   contactName: dto.contact_name,

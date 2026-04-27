@@ -53,6 +53,19 @@
   margin-bottom: 6px;
 }
 
+.topActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .fullWidthButton {
   width: 100%;
 }
@@ -63,4 +76,120 @@
   gap: 12px;
   color: var(--color-text-secondary);
   font-weight: 500;
+}
+
+.setupModal {
+  width: min(980px, calc(100vw - 32px));
+}
+
+.createModal {
+  width: min(820px, calc(100vw - 32px));
+}
+
+.createForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.createNameRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (max-width: 860px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.createActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.usersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.userCard {
+  background: var(--color-surface);
+  border: 1px solid rgba(214, 224, 234, 0.9);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.userCardTop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.userCardTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.userCardUsername {
+  font-family: var(--font-family-heading);
+  font-size: 1.1rem;
+  font-weight: 650;
+  color: var(--color-text-primary);
+  letter-spacing: 0.15px;
+}
+
+.userCardName {
+  color: var(--color-text-secondary);
+  font-weight: 550;
+}
+
+.userCardMeta {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.userCardActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.emptyText {
+  color: var(--color-text-secondary);
+  font-weight: 550;
+  padding: 10px 4px;
+}
+
+.setupTop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.setupHint {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.setupLinks {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.setupFrame {
+  display: none;
 }

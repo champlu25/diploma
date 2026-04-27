@@ -4,6 +4,62 @@
   gap: 16px;
 }
 
+.statusNav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 6px;
+}
+
+.statusLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: rgba(28, 37, 38, 0.85);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.statusLink::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 200ms ease;
+}
+
+.statusLink:hover,
+.statusLink:focus-visible {
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.statusLink:hover::after,
+.statusLink:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.statusActive {
+  color: var(--color-text-primary);
+}
+
+.statusActive::after {
+  transform: scaleX(1);
+}
+
 .filters {
   display: flex;
   align-items: flex-end;
@@ -37,14 +93,46 @@
 
 .actions {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   justify-content: center;
   width: 100%;
+}
+
+.actionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .actions button {
   padding: 6px;
   border-radius: 10px;
+}
+
+.actionSelect {
+  height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  max-width: 140px;
+  box-sizing: border-box;
+}
+
+.actionSelect:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .cellInput,

@@ -16,6 +16,11 @@
   font-weight: 900;
 }
 
+.actionsRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .sectionTitle {
   font-family: var(--font-family-heading);
   font-size: 1.15rem;

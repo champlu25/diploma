@@ -7,11 +7,11 @@ interface AuthResponse {
 }
 
 export const login = async (
-  email: string,
+  username: string,
   password: string,
 ): Promise<AuthUser> => {
   const { data } = await httpClient.post<AuthResponse>("/api/auth/login", {
-    email,
+    username,
     password,
   });
 
@@ -33,4 +33,8 @@ export const getCurrentUser = async (): Promise<AuthUser | null> => {
 
     throw error;
   }
+};
+
+export const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
+  await httpClient.post("/api/auth/change-password", { oldPassword, newPassword });
 };

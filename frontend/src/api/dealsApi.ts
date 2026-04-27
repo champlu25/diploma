@@ -4,13 +4,16 @@ import type { Deal, DealFormValues, DealLookups } from "../types/deal";
 interface DealDto {
   id: number;
   company_id: number;
-  company_owner_user_id: number;
-  manager_email: string;
+  company_manager_user_id: number;
+  manager_name: string;
   company_name: string;
   company_inn: string;
   need: string;
   deal_status_id: number;
   deal_status_name: string;
+  deal_lifecycle_status_id: number;
+  deal_lifecycle_status_name: string;
+  completed_at: string | null;
   pl_cost_rub: number;
   leasing_company_id: number;
   leasing_company_name: string;
@@ -46,13 +49,16 @@ interface DealResponse {
 const toDeal = (dto: DealDto): Deal => ({
   id: dto.id,
   companyId: dto.company_id,
-  companyOwnerUserId: dto.company_owner_user_id,
-  managerEmail: dto.manager_email,
+  companyManagerUserId: dto.company_manager_user_id,
+  managerName: dto.manager_name,
   companyName: dto.company_name,
   companyInn: dto.company_inn,
   need: dto.need,
   dealStatusId: dto.deal_status_id,
   dealStatusName: dto.deal_status_name,
+  dealLifecycleStatusId: dto.deal_lifecycle_status_id,
+  dealLifecycleStatusName: dto.deal_lifecycle_status_name,
+  completedAt: dto.completed_at,
   plCostRub: dto.pl_cost_rub,
   leasingCompanyId: dto.leasing_company_id,
   leasingCompanyName: dto.leasing_company_name,
@@ -111,3 +117,16 @@ export const deleteDeal = async (dealId: number): Promise<DeleteDealResponse> =>
   return data;
 };
 
+export const updateDealLifecycleStatus = async (
+  dealId: number,
+  dealLifecycleStatusId: number,
+): Promise<DealResponse> => {
+  const { data } = await httpClient.patch<DealDtoResponse>(`/api/deals/${dealId}/lifecycle-status`, {
+    dealLifecycleStatusId,
+  });
+
+  return {
+    ...data,
+    deal: toDeal(data.deal),
+  };
+};

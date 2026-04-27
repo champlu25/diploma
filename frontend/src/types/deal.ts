@@ -1,13 +1,16 @@
 export interface Deal {
   id: number;
   companyId: number;
-  companyOwnerUserId: number;
-  managerEmail: string;
+  companyManagerUserId: number;
+  managerName: string;
   companyName: string;
   companyInn: string;
   need: string;
   dealStatusId: number;
   dealStatusName: string;
+  dealLifecycleStatusId: number;
+  dealLifecycleStatusName: string;
+  completedAt: string | null;
   plCostRub: number;
   leasingCompanyId: number;
   leasingCompanyName: string;
@@ -27,6 +30,7 @@ export interface DealLookupItem {
 
 export interface DealLookups {
   dealStatuses: DealLookupItem[];
+  dealLifecycleStatuses: DealLookupItem[];
   leasingCompanies: DealLookupItem[];
   dealStages: DealLookupItem[];
 }

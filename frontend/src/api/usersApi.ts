@@ -3,13 +3,14 @@ import type { User, UserRole } from "../types/user";
 
 interface UserDto {
   id: number;
-  email: string;
+  username: string;
   last_name?: string | null;
   first_name?: string | null;
   middle_name?: string | null;
   role: UserRole;
   group_lead_user_id?: number | null;
-  group_lead_email?: string | null;
+  group_lead_username?: string | null;
+  must_change_password?: boolean;
 }
 
 interface UsersResponse {
@@ -18,13 +19,14 @@ interface UsersResponse {
 
 const toUser = (dto: UserDto): User => ({
   id: dto.id,
-  email: dto.email,
+  username: dto.username,
   lastName: dto.last_name ?? null,
   firstName: dto.first_name ?? null,
   middleName: dto.middle_name ?? null,
   role: dto.role,
   groupLeadUserId: dto.group_lead_user_id ?? null,
-  groupLeadEmail: dto.group_lead_email ?? null,
+  groupLeadUsername: dto.group_lead_username ?? null,
+  mustChangePassword: dto.must_change_password ?? false,
 });
 
 export const getUsers = async (): Promise<User[]> => {
@@ -32,35 +34,41 @@ export const getUsers = async (): Promise<User[]> => {
   return data.users.map(toUser);
 };
 
-export type InviteRole = Exclude<UserRole, "owner">;
+export type CreateUserRole = Exclude<UserRole, "owner">;
 
-interface InviteUserResponse {
+interface CreateUserResponse {
   message: string;
-  invitedUser: User;
-  inviteLink?: string;
+  user: UserDto;
+  tempPassword: string;
 }
 
-interface InviteUserDtoResponse {
-  message: string;
-  invitedUser: UserDto;
-  inviteLink?: string;
-}
-
-export const inviteUser = async (
-  email: string,
-  role: InviteRole,
-  groupLeadUserId: number | null = null,
-): Promise<InviteUserResponse> => {
-  const { data } = await httpClient.post<InviteUserDtoResponse>("/api/owner/users/invite", {
-    email,
-    role,
-    groupLeadUserId,
-  });
+export const createUser = async (params: {
+  username: string;
+  role: CreateUserRole;
+  groupLeadUserId: number | null;
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
+}): Promise<{ message: string; user: User; tempPassword: string }> => {
+  const { data } = await httpClient.post<CreateUserResponse>("/api/owner/users", params);
 
   return {
-    ...data,
-    invitedUser: toUser(data.invitedUser),
+    message: data.message,
+    user: toUser(data.user),
+    tempPassword: data.tempPassword,
   };
+};
+
+export const resetUserPassword = async (
+  userId: number,
+): Promise<{ message: string; user: { id: number; username: string }; tempPassword: string }> => {
+  const { data } = await httpClient.post<{
+    message: string;
+    user: { id: number; username: string };
+    tempPassword: string;
+  }>(`/api/owner/users/${userId}/reset-password`);
+
+  return data;
 };
 
 interface AssignGroupLeadResponse {
@@ -90,7 +98,7 @@ export const assignManagerToGroupLead = async (
 
 interface GroupManagerDto {
   id: number;
-  email: string;
+  username: string;
   last_name?: string | null;
   first_name?: string | null;
   middle_name?: string | null;
@@ -99,7 +107,7 @@ interface GroupManagerDto {
 
 export interface GroupManager {
   id: number;
-  email: string;
+  username: string;
   lastName: string | null;
   firstName: string | null;
   middleName: string | null;
@@ -114,7 +122,7 @@ export const getGroupLeadManagers = async (): Promise<GroupManager[]> => {
   const { data } = await httpClient.get<GroupManagersResponse>("/api/group-lead/managers");
   return data.managers.map((manager) => ({
     id: manager.id,
-    email: manager.email,
+    username: manager.username,
     lastName: manager.last_name ?? null,
     firstName: manager.first_name ?? null,
     middleName: manager.middle_name ?? null,
@@ -129,21 +137,4 @@ interface TransferTargetsResponse {
 export const getTransferTargets = async (): Promise<User[]> => {
   const { data } = await httpClient.get<TransferTargetsResponse>("/api/users/transfer-targets");
   return data.users.map(toUser);
-};
-
-interface OwnerPasswordLinkResponse {
-  message: string;
-  setupLink: string;
-  expiresAt: string;
-  user: User;
-}
-
-export const createOwnerPasswordLink = async (
-  userId: number,
-): Promise<OwnerPasswordLinkResponse> => {
-  const { data } = await httpClient.post<OwnerPasswordLinkResponse>(
-    `/api/owner/users/${userId}/password-link`,
-  );
-
-  return data;
 };

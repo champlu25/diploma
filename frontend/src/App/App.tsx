@@ -6,7 +6,6 @@ import { AdminPage } from "../pages/AdminPage/AdminPage";
 import { CompaniesPage } from "../pages/CompaniesPage/CompaniesPage";
 import { DealsPage } from "../pages/DealsPage/DealsPage";
 import { LoginPage } from "../pages/LoginPage/LoginPage";
-import { SetPasswordPage } from "../pages/SetPasswordPage/SetPasswordPage";
 import { UserHomePage } from "../pages/UserHomePage/UserHomePage";
 import type { AuthUser } from "../types/user";
 import { getApiErrorMessage } from "../utils/httpError";
@@ -61,6 +60,15 @@ function App() {
     setSessionError(null);
   }, []);
 
+  const handlePasswordChanged = useCallback(async () => {
+    try {
+      const refreshed = await getCurrentUser();
+      setCurrentUser(refreshed);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   if (isSessionLoading) {
     return (
       <div className={styles.loading}>
@@ -73,8 +81,6 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/set-password" element={<SetPasswordPage />} />
-
         <Route
           path="/login"
           element={
@@ -96,6 +102,7 @@ function App() {
                 currentUser={currentUser}
                 onLogout={handleLogout}
                 sessionError={sessionError}
+                onPasswordChanged={handlePasswordChanged}
               />
             )
           }
@@ -110,8 +117,26 @@ function App() {
               )
             }
           />
-          <Route path="companies" element={<CompaniesPage currentUser={currentUser!} />} />
-          <Route path="deals" element={<DealsPage currentUser={currentUser!} />} />
+          <Route
+            path="companies"
+            element={
+              currentUser?.mustChangePassword ? (
+                <Navigate to="/" replace />
+              ) : (
+                <CompaniesPage currentUser={currentUser!} />
+              )
+            }
+          />
+          <Route
+            path="deals"
+            element={
+              currentUser?.mustChangePassword ? (
+                <Navigate to="/" replace />
+              ) : (
+                <DealsPage currentUser={currentUser!} />
+              )
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to={currentUser ? "/" : "/login"} replace />} />

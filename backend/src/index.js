@@ -1,14 +1,12 @@
 ﻿const cors = require("cors");
 const dotenv = require("dotenv");
 const express = require("express");
+const crypto = require("crypto");
 
 dotenv.config();
 
 const { pool } = require("./db");
-const { sendPasswordSetupEmail } = require("./email");
 const {
-  generateInviteToken,
-  hashInviteToken,
   hashPassword,
   signJwt,
   validatePassword,
@@ -19,97 +17,18 @@ const {
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
-const inviteLinkBase = (process.env.INVITE_LINK_BASE || frontendOrigin).replace(
-  /\/+$/,
-  ""
-);
 const authTokenTtlHours = Number(process.env.AUTH_TOKEN_TTL_HOURS || 12);
-const inviteTtlHours = Number(process.env.INVITE_TTL_HOURS || 24);
-const ownerPasswordLinkTtlMinutes = Number(process.env.RESET_TTL_MINUTES || 30);
-const showInviteLinkInResponse =
-  process.env.SHOW_INVITE_LINK_IN_RESPONSE === "true";
 const authJwtSecret = process.env.AUTH_JWT_SECRET || "";
 const authCookieName = "access_token";
 const isProduction = process.env.NODE_ENV === "production";
-const inviteAllowedRoles = new Set(["manager", "group_lead"]);
 
 if (!Number.isFinite(authTokenTtlHours) || authTokenTtlHours <= 0) {
   throw new Error("AUTH_TOKEN_TTL_HOURS должен быть положительным числом.");
 }
 
-if (!Number.isFinite(inviteTtlHours) || inviteTtlHours <= 0) {
-  throw new Error("INVITE_TTL_HOURS должен быть положительным числом.");
-}
-
-if (
-  !Number.isFinite(ownerPasswordLinkTtlMinutes) ||
-  ownerPasswordLinkTtlMinutes <= 0
-) {
-  throw new Error("RESET_TTL_MINUTES должен быть положительным числом.");
-}
-
 if (!authJwtSecret) {
   throw new Error("AUTH_JWT_SECRET обязателен.");
 }
-
-const ensureInviteSchemaCompatibility = async () => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const columnsResult = await client.query(
-      `
-        SELECT
-          column_name,
-          is_nullable
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'users'
-          AND column_name IN ('last_name', 'first_name')
-      `
-    );
-
-    const columns = new Map(
-      columnsResult.rows.map((row) => [row.column_name, row.is_nullable])
-    );
-
-    const alterStatements = [];
-
-    if (columns.get("last_name") === "NO") {
-      alterStatements.push(
-        "ALTER TABLE users ALTER COLUMN last_name DROP NOT NULL"
-      );
-    }
-
-    if (columns.get("first_name") === "NO") {
-      alterStatements.push(
-        "ALTER TABLE users ALTER COLUMN first_name DROP NOT NULL"
-      );
-    }
-
-    if (alterStatements.length > 0) {
-      for (const statement of alterStatements) {
-        await client.query(statement);
-      }
-
-      console.warn(
-        "Схема БД обновлена автоматически: users.last_name/first_name теперь допускают NULL (для приглашений)."
-      );
-    }
-
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.warn(
-      "Не удалось автоматически поправить схему БД для приглашений (users.last_name/first_name). " +
-        "Если приглашения не работают, примените миграции из backend/sql.",
-      error
-    );
-  } finally {
-    client.release();
-  }
-};
 
 app.use(
   cors({
@@ -119,7 +38,7 @@ app.use(
 );
 app.use(express.json());
 
-const normalizeEmail = (value) =>
+const normalizeUsername = (value) =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
 const normalizeToken = (value) =>
@@ -325,7 +244,7 @@ const issueAuthCookie = ({ res, user }) => {
   const token = signJwt({
     payload: {
       sub: String(user.id),
-      email: user.email,
+      username: user.username,
       role: user.role,
     },
     secret: authJwtSecret,
@@ -335,42 +254,10 @@ const issueAuthCookie = ({ res, user }) => {
   res.cookie(authCookieName, token, getAuthCookieOptions());
 };
 
-const buildPasswordSetupLink = (rawToken) =>
-  `${inviteLinkBase}/set-password?token=${encodeURIComponent(rawToken)}`;
-
-const createPasswordSetupToken = async ({ client, userId, ttlMinutes }) => {
-  const rawToken = generateInviteToken();
-  const tokenHash = hashInviteToken(rawToken);
-  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
-
-  await client.query(
-    `
-      UPDATE password_setup_tokens
-      SET
-        used_at = NOW(),
-        updated_at = NOW()
-      WHERE user_id = $1
-        AND used_at IS NULL
-    `,
-    [userId]
-  );
-
-  await client.query(
-    `
-      INSERT INTO password_setup_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES ($1, $2, $3)
-    `,
-    [userId, tokenHash, expiresAt]
-  );
-
-  return {
-    rawToken,
-    expiresAt,
-  };
+const generateTempPassword = () => {
+  const raw = crypto.randomBytes(18).toString("base64");
+  const normalized = raw.replace(/[^a-zA-Z0-9]/g, "");
+  return normalized.slice(0, 12);
 };
 
 app.get("/api/health", (_req, res) => {
@@ -383,13 +270,17 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
       `
         SELECT
           u.id,
-          u.email,
+          u.username,
           u.last_name,
           u.first_name,
           u.middle_name,
-          r.name AS role
+          u.must_change_password,
+          r.name AS role,
+          u.group_lead_user_id,
+          gl.username AS group_lead_username
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
+        LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
         WHERE u.id = $1
         LIMIT 1
       `,
@@ -409,11 +300,14 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
     res.status(200).json({
       user: {
         id: user.id,
-        email: user.email,
+        username: user.username,
         lastName: user.last_name,
         firstName: user.first_name,
         middleName: user.middle_name,
         role: user.role,
+        mustChangePassword: user.must_change_password,
+        groupLeadUserId: user.group_lead_user_id,
+        groupLeadUsername: user.group_lead_username,
       },
     });
   } catch (error) {
@@ -425,13 +319,13 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
 });
 
 app.post("/api/auth/login", async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
+  const username = normalizeUsername(req.body?.username);
   const password =
     typeof req.body?.password === "string" ? req.body.password : "";
 
-  if (!email || !password) {
+  if (!username || !password) {
     res.status(400).json({
-      message: "Поля email и password обязательны.",
+      message: "Поля username и password обязательны.",
     });
     return;
   }
@@ -441,43 +335,50 @@ app.post("/api/auth/login", async (req, res) => {
       `
         SELECT
           u.id,
-          u.email,
+          u.username,
           u.last_name,
           u.first_name,
           u.middle_name,
+          u.must_change_password,
           u.password_hash,
-          r.name AS role
+          r.name AS role,
+          u.group_lead_user_id,
+          gl.username AS group_lead_username
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
-        WHERE u.email = $1
+        LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
+        WHERE u.username = $1
         LIMIT 1
       `,
-      [email]
+      [username]
     );
 
     if (userResult.rowCount === 0) {
       res.status(401).json({
-        message: "Неверный email или пароль.",
+        message: "Неверный логин или пароль.",
       });
       return;
     }
 
     const user = userResult.rows[0];
 
-    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
+    if (!verifyPassword(password, user.password_hash)) {
       res.status(401).json({
-        message: "Неверный email или пароль.",
+        message: "Неверный логин или пароль.",
       });
       return;
     }
 
     const authUser = {
       id: user.id,
-      email: user.email,
+      username: user.username,
       lastName: user.last_name,
       firstName: user.first_name,
       middleName: user.middle_name,
       role: user.role,
+      mustChangePassword: user.must_change_password,
+      groupLeadUserId: user.group_lead_user_id,
+      groupLeadUsername: user.group_lead_username,
     };
 
     issueAuthCookie({ res, user: authUser });
@@ -501,19 +402,95 @@ app.post("/api/auth/logout", (_req, res) => {
   });
 });
 
+app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+  const oldPassword =
+    typeof req.body?.oldPassword === "string" ? req.body.oldPassword : "";
+  const newPassword =
+    typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+
+  if (!oldPassword || !newPassword) {
+    res.status(400).json({
+      message: "Поля oldPassword и newPassword обязательны.",
+    });
+    return;
+  }
+
+  const passwordError = validatePassword(newPassword);
+  if (passwordError) {
+    res.status(400).json({
+      message: passwordError,
+    });
+    return;
+  }
+
+  try {
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          password_hash
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [req.auth.sub]
+    );
+
+    if (userResult.rowCount === 0) {
+      res.clearCookie(authCookieName, getEmptyAuthCookieOptions());
+      res.status(401).json({
+        message: "Сессия недействительна. Войдите снова.",
+      });
+      return;
+    }
+
+    const user = userResult.rows[0];
+    if (!verifyPassword(oldPassword, user.password_hash)) {
+      res.status(400).json({
+        message: "Старый пароль введён неверно.",
+      });
+      return;
+    }
+
+    const nextHash = hashPassword(newPassword);
+
+    await pool.query(
+      `
+        UPDATE users
+        SET
+          password_hash = $1,
+          must_change_password = FALSE,
+          updated_at = NOW()
+        WHERE id = $2
+      `,
+      [nextHash, user.id]
+    );
+
+    res.status(200).json({
+      message: "Пароль изменён.",
+    });
+  } catch (error) {
+    console.error("Не удалось изменить пароль:", error);
+    res.status(500).json({
+      message: "Не удалось изменить пароль.",
+    });
+  }
+});
+
 app.get("/api/users", requireOwner, async (_req, res) => {
   try {
     const result = await pool.query(
       `
         SELECT
           u.id,
-          u.email,
+          u.username,
           u.last_name,
           u.first_name,
           u.middle_name,
           r.name AS role,
           u.group_lead_user_id,
-          gl.email AS group_lead_email
+          gl.username AS group_lead_username,
+          u.must_change_password
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
         LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
@@ -535,15 +512,15 @@ app.get("/api/companies", requireAuth, async (req, res) => {
 
   try {
     let params = [currentUserId];
-    let whereSql = "WHERE c.owner_user_id = $1";
+    let whereSql = "WHERE c.manager_user_id = $1";
 
     if (req.auth.role === "owner") {
       params = [];
       whereSql = "";
     } else if (req.auth.role === "group_lead") {
       whereSql = `
-        WHERE c.owner_user_id = $1
-          OR c.owner_user_id IN (
+        WHERE c.manager_user_id = $1
+          OR c.manager_user_id IN (
             SELECT u.id
             FROM users AS u
             JOIN roles AS r ON r.id = u.role_id
@@ -557,8 +534,11 @@ app.get("/api/companies", requireAuth, async (req, res) => {
       `
         SELECT
           c.id,
-          c.owner_user_id,
-          u.email AS owner_email,
+          c.manager_user_id,
+          COALESCE(
+            NULLIF(trim(concat_ws(' ', u.last_name, u.first_name, u.middle_name)), ''),
+            u.username
+          ) AS manager_name,
           c.name,
           c.inn,
           c.contact_name,
@@ -569,7 +549,7 @@ app.get("/api/companies", requireAuth, async (req, res) => {
           c.created_at,
           c.updated_at
         FROM companies AS c
-        JOIN users AS u ON u.id = c.owner_user_id
+        JOIN users AS u ON u.id = c.manager_user_id
         ${whereSql}
         ORDER BY c.id ASC
       `,
@@ -600,13 +580,13 @@ app.get("/api/users/transfer-targets", requireAuth, async (req, res) => {
       `
         SELECT
           u.id,
-          u.email,
+          u.username,
           u.last_name,
           u.first_name,
           u.middle_name,
           r.name AS role,
           u.group_lead_user_id,
-          gl.email AS group_lead_email
+          gl.username AS group_lead_username
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
         LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
@@ -640,17 +620,17 @@ app.get("/api/group-lead/managers", requireAuth, async (req, res) => {
       `
         SELECT
           u.id,
-          u.email,
+          u.username,
           u.last_name,
           u.first_name,
           u.middle_name,
           COUNT(c.id)::INT AS companies_count
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
-        LEFT JOIN companies AS c ON c.owner_user_id = u.id
+        LEFT JOIN companies AS c ON c.manager_user_id = u.id
         WHERE r.name = 'manager'
           AND u.group_lead_user_id = $1
-        GROUP BY u.id, u.email, u.last_name, u.first_name, u.middle_name
+        GROUP BY u.id, u.username, u.last_name, u.first_name, u.middle_name
         ORDER BY u.id ASC
       `,
       [currentUserId]
@@ -712,7 +692,7 @@ app.patch(
         `
         SELECT
           u.id,
-          u.email,
+          u.username,
           r.name AS role
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
@@ -754,7 +734,7 @@ app.patch(
           `
           SELECT
             u.id,
-            u.email,
+            u.username,
             r.name AS role
           FROM users AS u
           JOIN roles AS r ON r.id = u.role_id
@@ -786,7 +766,7 @@ app.patch(
         UPDATE users
         SET group_lead_user_id = $1
         WHERE id = $2
-        RETURNING id, email, last_name, first_name, middle_name, group_lead_user_id
+        RETURNING id, username, last_name, first_name, middle_name, group_lead_user_id
       `,
         [groupLeadUserId, userId]
       );
@@ -851,7 +831,7 @@ app.post("/api/companies", requireAuth, async (req, res) => {
     const result = await pool.query(
       `
         INSERT INTO companies (
-          owner_user_id,
+          manager_user_id,
           name,
           inn,
           contact_name,
@@ -863,8 +843,16 @@ app.post("/api/companies", requireAuth, async (req, res) => {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING
           id,
-          owner_user_id,
-          (SELECT email FROM users WHERE id = owner_user_id) AS owner_email,
+          manager_user_id,
+          (
+            SELECT
+              COALESCE(
+                NULLIF(trim(concat_ws(' ', last_name, first_name, middle_name)), ''),
+                email
+              )
+            FROM users
+            WHERE id = manager_user_id
+          ) AS manager_name,
           name,
           inn,
           contact_name,
@@ -988,15 +976,15 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
       `
         SELECT
           c.id,
-          c.owner_user_id,
+          c.manager_user_id,
           CASE
             WHEN $2 = 'owner' THEN TRUE
-            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN c.manager_user_id = $1 THEN TRUE
             WHEN $2 = 'group_lead' AND EXISTS (
               SELECT 1
               FROM users AS u
               JOIN roles AS r ON r.id = u.role_id
-              WHERE u.id = c.owner_user_id
+              WHERE u.id = c.manager_user_id
                 AND u.group_lead_user_id = $1
                 AND r.name = 'manager'
             ) THEN TRUE
@@ -1038,8 +1026,16 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
         WHERE id = $${values.length}
         RETURNING
           id,
-          owner_user_id,
-          (SELECT email FROM users WHERE id = owner_user_id) AS owner_email,
+          manager_user_id,
+          (
+            SELECT
+              COALESCE(
+                NULLIF(trim(concat_ws(' ', last_name, first_name, middle_name)), ''),
+                email
+              )
+            FROM users
+            WHERE id = manager_user_id
+          ) AS manager_name,
           name,
           inn,
           contact_name,
@@ -1120,16 +1116,16 @@ app.post("/api/companies/:companyId/transfer", requireAuth, async (req, res) => 
       `
         SELECT
           c.id,
-          c.owner_user_id,
+          c.manager_user_id,
           CASE
             WHEN $2 = 'owner' THEN TRUE
             WHEN $2 = 'group_lead' AND (
-              c.owner_user_id = $1
+              c.manager_user_id = $1
               OR EXISTS (
                 SELECT 1
                 FROM users AS u
                 JOIN roles AS r ON r.id = u.role_id
-                WHERE u.id = c.owner_user_id
+                WHERE u.id = c.manager_user_id
                   AND u.group_lead_user_id = $1
                   AND r.name = 'manager'
               )
@@ -1161,12 +1157,20 @@ app.post("/api/companies/:companyId/transfer", requireAuth, async (req, res) => 
     const updateResult = await pool.query(
       `
         UPDATE companies
-        SET owner_user_id = $1
+        SET manager_user_id = $1
         WHERE id = $2
         RETURNING
           id,
-          owner_user_id,
-          (SELECT email FROM users WHERE id = owner_user_id) AS owner_email,
+          manager_user_id,
+          (
+            SELECT
+              COALESCE(
+                NULLIF(trim(concat_ws(' ', last_name, first_name, middle_name)), ''),
+                email
+              )
+            FROM users
+            WHERE id = manager_user_id
+          ) AS manager_name,
           name,
           inn,
           contact_name,
@@ -1208,15 +1212,15 @@ app.delete("/api/companies/:companyId", requireAuth, async (req, res) => {
       `
         SELECT
           c.id,
-          c.owner_user_id,
+          c.manager_user_id,
           CASE
             WHEN $2 = 'owner' THEN TRUE
-            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN c.manager_user_id = $1 THEN TRUE
             WHEN $2 = 'group_lead' AND EXISTS (
               SELECT 1
               FROM users AS u
               JOIN roles AS r ON r.id = u.role_id
-              WHERE u.id = c.owner_user_id
+              WHERE u.id = c.manager_user_id
                 AND u.group_lead_user_id = $1
                 AND r.name = 'manager'
             ) THEN TRUE
@@ -1265,7 +1269,12 @@ app.delete("/api/companies/:companyId", requireAuth, async (req, res) => {
 
 app.get("/api/deals/lookups", requireAuth, async (_req, res) => {
   try {
-    const [statusesResult, leasingCompaniesResult, stagesResult] =
+    const [
+      statusesResult,
+      lifecycleStatusesResult,
+      leasingCompaniesResult,
+      stagesResult,
+    ] =
       await Promise.all([
         pool.query(
           `
@@ -1273,6 +1282,15 @@ app.get("/api/deals/lookups", requireAuth, async (_req, res) => {
             id,
             name
           FROM deal_statuses
+          ORDER BY id ASC
+        `
+        ),
+        pool.query(
+          `
+          SELECT
+            id,
+            name
+          FROM deal_lifecycle_statuses
           ORDER BY id ASC
         `
         ),
@@ -1298,6 +1316,7 @@ app.get("/api/deals/lookups", requireAuth, async (_req, res) => {
 
     res.status(200).json({
       dealStatuses: statusesResult.rows,
+      dealLifecycleStatuses: lifecycleStatusesResult.rows,
       leasingCompanies: leasingCompaniesResult.rows,
       dealStages: stagesResult.rows,
     });
@@ -1314,15 +1333,15 @@ app.get("/api/deals", requireAuth, async (req, res) => {
 
   try {
     let params = [currentUserId];
-    let whereSql = "WHERE c.owner_user_id = $1";
+    let whereSql = "WHERE c.manager_user_id = $1";
 
     if (req.auth.role === "owner") {
       params = [];
       whereSql = "";
     } else if (req.auth.role === "group_lead") {
       whereSql = `
-        WHERE c.owner_user_id = $1
-          OR c.owner_user_id IN (
+        WHERE c.manager_user_id = $1
+          OR c.manager_user_id IN (
             SELECT u.id
             FROM users AS u
             JOIN roles AS r ON r.id = u.role_id
@@ -1337,13 +1356,19 @@ app.get("/api/deals", requireAuth, async (req, res) => {
         SELECT
           d.id,
           d.company_id,
-          c.owner_user_id AS company_owner_user_id,
-          u.email AS manager_email,
+          c.manager_user_id AS company_manager_user_id,
+          COALESCE(
+            NULLIF(trim(concat_ws(' ', u.last_name, u.first_name, u.middle_name)), ''),
+            u.username
+          ) AS manager_name,
           c.name AS company_name,
           c.inn AS company_inn,
           d.need,
           d.deal_status_id,
           ds.name AS deal_status_name,
+          d.deal_lifecycle_status_id,
+          dls.name AS deal_lifecycle_status_name,
+          d.completed_at,
           d.pl_cost_rub,
           d.leasing_company_id,
           lc.name AS leasing_company_name,
@@ -1356,8 +1381,9 @@ app.get("/api/deals", requireAuth, async (req, res) => {
           d.updated_at
         FROM deals AS d
         JOIN companies AS c ON c.id = d.company_id
-        JOIN users AS u ON u.id = c.owner_user_id
+        JOIN users AS u ON u.id = c.manager_user_id
         JOIN deal_statuses AS ds ON ds.id = d.deal_status_id
+        JOIN deal_lifecycle_statuses AS dls ON dls.id = d.deal_lifecycle_status_id
         JOIN leasing_companies AS lc ON lc.id = d.leasing_company_id
         JOIN deal_stages AS st ON st.id = d.deal_stage_id
         ${whereSql}
@@ -1453,13 +1479,19 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
       SELECT
         d.id,
         d.company_id,
-        c.owner_user_id AS company_owner_user_id,
-        u.email AS manager_email,
+        c.manager_user_id AS company_manager_user_id,
+        COALESCE(
+          NULLIF(trim(concat_ws(' ', u.last_name, u.first_name, u.middle_name)), ''),
+          u.username
+        ) AS manager_name,
         c.name AS company_name,
         c.inn AS company_inn,
         d.need,
         d.deal_status_id,
         ds.name AS deal_status_name,
+        d.deal_lifecycle_status_id,
+        dls.name AS deal_lifecycle_status_name,
+        d.completed_at,
         d.pl_cost_rub,
         d.leasing_company_id,
         lc.name AS leasing_company_name,
@@ -1472,8 +1504,9 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
         d.updated_at
       FROM deals AS d
       JOIN companies AS c ON c.id = d.company_id
-      JOIN users AS u ON u.id = c.owner_user_id
+      JOIN users AS u ON u.id = c.manager_user_id
       JOIN deal_statuses AS ds ON ds.id = d.deal_status_id
+      JOIN deal_lifecycle_statuses AS dls ON dls.id = d.deal_lifecycle_status_id
       JOIN leasing_companies AS lc ON lc.id = d.leasing_company_id
       JOIN deal_stages AS st ON st.id = d.deal_stage_id
       WHERE d.id = $1
@@ -1486,12 +1519,12 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
           c.id,
           CASE
             WHEN $2 = 'owner' THEN TRUE
-            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN c.manager_user_id = $1 THEN TRUE
             WHEN $2 = 'group_lead' AND EXISTS (
               SELECT 1
               FROM users AS u
               JOIN roles AS r ON r.id = u.role_id
-              WHERE u.id = c.owner_user_id
+              WHERE u.id = c.manager_user_id
                 AND u.group_lead_user_id = $1
                 AND r.name = 'manager'
             ) THEN TRUE
@@ -1525,6 +1558,8 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
           company_id,
           need,
           deal_status_id,
+          deal_lifecycle_status_id,
+          completed_at,
           pl_cost_rub,
           leasing_company_id,
           advance_percent,
@@ -1532,12 +1567,26 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
           deal_stage_id,
           comment
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES (
+          $1,
+          $2,
+          $3,
+          (SELECT id FROM deal_lifecycle_statuses WHERE name = 'Активные' LIMIT 1),
+          NULL,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9
+        )
         RETURNING
           id,
           company_id,
           need,
           deal_status_id,
+          deal_lifecycle_status_id,
+          completed_at,
           pl_cost_rub,
           leasing_company_id,
           advance_percent,
@@ -1692,13 +1741,19 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
       SELECT
         d.id,
         d.company_id,
-        c.owner_user_id AS company_owner_user_id,
-        u.email AS manager_email,
+        c.manager_user_id AS company_manager_user_id,
+        COALESCE(
+          NULLIF(trim(concat_ws(' ', u.last_name, u.first_name, u.middle_name)), ''),
+          u.username
+        ) AS manager_name,
         c.name AS company_name,
         c.inn AS company_inn,
         d.need,
         d.deal_status_id,
         ds.name AS deal_status_name,
+        d.deal_lifecycle_status_id,
+        dls.name AS deal_lifecycle_status_name,
+        d.completed_at,
         d.pl_cost_rub,
         d.leasing_company_id,
         lc.name AS leasing_company_name,
@@ -1711,8 +1766,9 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
         d.updated_at
       FROM deals AS d
       JOIN companies AS c ON c.id = d.company_id
-      JOIN users AS u ON u.id = c.owner_user_id
+      JOIN users AS u ON u.id = c.manager_user_id
       JOIN deal_statuses AS ds ON ds.id = d.deal_status_id
+      JOIN deal_lifecycle_statuses AS dls ON dls.id = d.deal_lifecycle_status_id
       JOIN leasing_companies AS lc ON lc.id = d.leasing_company_id
       JOIN deal_stages AS st ON st.id = d.deal_stage_id
       WHERE d.id = $1
@@ -1725,12 +1781,12 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
           d.id,
           CASE
             WHEN $2 = 'owner' THEN TRUE
-            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN c.manager_user_id = $1 THEN TRUE
             WHEN $2 = 'group_lead' AND EXISTS (
               SELECT 1
               FROM users AS u
               JOIN roles AS r ON r.id = u.role_id
-              WHERE u.id = c.owner_user_id
+              WHERE u.id = c.manager_user_id
                 AND u.group_lead_user_id = $1
                 AND r.name = 'manager'
             ) THEN TRUE
@@ -1812,6 +1868,164 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
   }
 });
 
+app.patch("/api/deals/:dealId/lifecycle-status", requireAuth, async (req, res) => {
+  const dealId = parseUserId(req.params?.dealId);
+  const currentUserId = Number(req.auth.sub);
+  const dealLifecycleStatusId = parseUserId(req.body?.dealLifecycleStatusId);
+
+  if (!dealId) {
+    res.status(400).json({
+      message: "Некорректный dealId.",
+    });
+    return;
+  }
+
+  if (!dealLifecycleStatusId) {
+    res.status(400).json({
+      message: "Некорректный статус жизненного цикла сделки.",
+    });
+    return;
+  }
+
+  try {
+    const selectDealByIdSql = `
+      SELECT
+        d.id,
+        d.company_id,
+        c.manager_user_id AS company_manager_user_id,
+        COALESCE(
+          NULLIF(trim(concat_ws(' ', u.last_name, u.first_name, u.middle_name)), ''),
+          u.username
+        ) AS manager_name,
+        c.name AS company_name,
+        c.inn AS company_inn,
+        d.need,
+        d.deal_status_id,
+        ds.name AS deal_status_name,
+        d.deal_lifecycle_status_id,
+        dls.name AS deal_lifecycle_status_name,
+        d.completed_at,
+        d.pl_cost_rub,
+        d.leasing_company_id,
+        lc.name AS leasing_company_name,
+        d.advance_percent::DOUBLE PRECISION AS advance_percent,
+        d.advance_total_rub,
+        d.deal_stage_id,
+        st.name AS deal_stage_name,
+        d.comment,
+        d.created_at,
+        d.updated_at
+      FROM deals AS d
+      JOIN companies AS c ON c.id = d.company_id
+      JOIN users AS u ON u.id = c.manager_user_id
+      JOIN deal_statuses AS ds ON ds.id = d.deal_status_id
+      JOIN deal_lifecycle_statuses AS dls ON dls.id = d.deal_lifecycle_status_id
+      JOIN leasing_companies AS lc ON lc.id = d.leasing_company_id
+      JOIN deal_stages AS st ON st.id = d.deal_stage_id
+      WHERE d.id = $1
+      LIMIT 1
+    `;
+
+    const dealAccessResult = await pool.query(
+      `
+        SELECT
+          d.id,
+          CASE
+            WHEN $2 = 'owner' THEN TRUE
+            WHEN c.manager_user_id = $1 THEN TRUE
+            WHEN $2 = 'group_lead' AND EXISTS (
+              SELECT 1
+              FROM users AS u
+              JOIN roles AS r ON r.id = u.role_id
+              WHERE u.id = c.manager_user_id
+                AND u.group_lead_user_id = $1
+                AND r.name = 'manager'
+            ) THEN TRUE
+            ELSE FALSE
+          END AS can_manage
+        FROM deals AS d
+        JOIN companies AS c ON c.id = d.company_id
+        WHERE d.id = $3
+        LIMIT 1
+      `,
+      [currentUserId, req.auth.role, dealId]
+    );
+
+    if (dealAccessResult.rowCount === 0) {
+      res.status(404).json({
+        message: "Сделка не найдена.",
+      });
+      return;
+    }
+
+    const dealAccess = dealAccessResult.rows[0];
+    if (!dealAccess.can_manage) {
+      res.status(404).json({
+        message: "Сделка не найдена.",
+      });
+      return;
+    }
+
+    const statusResult = await pool.query(
+      `
+        SELECT
+          id,
+          name
+        FROM deal_lifecycle_statuses
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [dealLifecycleStatusId]
+    );
+
+    if (statusResult.rowCount === 0) {
+      res.status(400).json({
+        message: "Статус жизненного цикла сделки не найден.",
+      });
+      return;
+    }
+
+    const statusName = statusResult.rows[0].name;
+    const isActiveStatus = statusName === "Активные";
+
+    await pool.query(
+      `
+        UPDATE deals
+        SET
+          deal_lifecycle_status_id = $1,
+          completed_at = CASE WHEN $2 THEN NULL ELSE NOW() END
+        WHERE id = $3
+      `,
+      [dealLifecycleStatusId, isActiveStatus, dealId]
+    );
+
+    const dealResult = await pool.query(selectDealByIdSql, [dealId]);
+    if (dealResult.rowCount === 0) {
+      res.status(404).json({
+        message: "Сделка не найдена.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Статус сделки обновлён.",
+      deal: dealResult.rows[0],
+    });
+  } catch (error) {
+    if (error?.code === "23503") {
+      res.status(400).json({
+        message: "Некорректный статус жизненного цикла сделки.",
+      });
+      return;
+    }
+
+    console.error("Не удалось обновить статус сделки:", error);
+    res.status(500).json({
+      message: "Не удалось обновить статус сделки.",
+    });
+  }
+});
+
 app.delete("/api/deals/:dealId", requireAuth, async (req, res) => {
   const dealId = parseUserId(req.params?.dealId);
   const currentUserId = Number(req.auth.sub);
@@ -1830,12 +2044,12 @@ app.delete("/api/deals/:dealId", requireAuth, async (req, res) => {
           d.id,
           CASE
             WHEN $2 = 'owner' THEN TRUE
-            WHEN c.owner_user_id = $1 THEN TRUE
+            WHEN c.manager_user_id = $1 THEN TRUE
             WHEN $2 = 'group_lead' AND EXISTS (
               SELECT 1
               FROM users AS u
               JOIN roles AS r ON r.id = u.role_id
-              WHERE u.id = c.owner_user_id
+              WHERE u.id = c.manager_user_id
                 AND u.group_lead_user_id = $1
                 AND r.name = 'manager'
             ) THEN TRUE
@@ -1883,23 +2097,27 @@ app.delete("/api/deals/:dealId", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/owner/users/invite", requireOwner, async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
+app.post("/api/owner/users", requireOwner, async (req, res) => {
+  const username = normalizeUsername(req.body?.username);
   const roleName = normalizeRole(req.body?.role);
+  const lastName = normalizeOptionalText(req.body?.lastName);
+  const firstName = normalizeOptionalText(req.body?.firstName);
+  const middleName = normalizeOptionalText(req.body?.middleName);
+
   const groupLeadUserIdRaw = req.body?.groupLeadUserId;
   const groupLeadUserId =
     groupLeadUserIdRaw === null || typeof groupLeadUserIdRaw === "undefined"
       ? null
       : parseUserId(groupLeadUserIdRaw);
 
-  if (!email || !roleName) {
+  if (!username || !roleName) {
     res.status(400).json({
-      message: "Поля email и role обязательны.",
+      message: "Поля username и role обязательны.",
     });
     return;
   }
 
-  if (!inviteAllowedRoles.has(roleName)) {
+  if (roleName !== "manager" && roleName !== "group_lead") {
     res.status(400).json({
       message: "Роль должна быть manager или group_lead.",
     });
@@ -1933,10 +2151,6 @@ app.post("/api/owner/users/invite", requireOwner, async (req, res) => {
   }
 
   const client = await pool.connect();
-
-  let invitedUser = null;
-  let setupLink = null;
-  let expiresAt = null;
 
   try {
     await client.query("BEGIN");
@@ -1992,444 +2206,143 @@ app.post("/api/owner/users/invite", requireOwner, async (req, res) => {
 
     const existingUserResult = await client.query(
       `
-        SELECT
-          u.id,
-          u.email,
-          r.name AS role
-        FROM users AS u
-        JOIN roles AS r ON r.id = u.role_id
-        WHERE u.email = $1
+        SELECT id
+        FROM users
+        WHERE username = $1
         LIMIT 1
       `,
-      [email]
+      [username]
     );
 
     if (existingUserResult.rowCount > 0) {
       await client.query("ROLLBACK");
       res.status(409).json({
-        message: "Пользователь с таким email уже существует.",
+        message: "Пользователь с таким username уже существует.",
       });
       return;
     }
 
+    const tempPassword = generateTempPassword();
+    const passwordHash = hashPassword(tempPassword);
+
     const userInsertResult = await client.query(
       `
-        INSERT INTO users (email, last_name, first_name, middle_name, password_hash, role_id, group_lead_user_id)
-        VALUES ($1, NULL, NULL, NULL, NULL, $2, $3)
-        RETURNING id, email, last_name, first_name, middle_name, group_lead_user_id
+        INSERT INTO users (
+          username,
+          last_name,
+          first_name,
+          middle_name,
+          password_hash,
+          must_change_password,
+          role_id,
+          group_lead_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7)
+        RETURNING
+          id,
+          username,
+          last_name,
+          first_name,
+          middle_name,
+          must_change_password,
+          group_lead_user_id
       `,
       [
-        email,
+        username,
+        lastName,
+        firstName,
+        middleName,
+        passwordHash,
         roleResult.rows[0].id,
         roleName === "manager" ? groupLeadUserId : null,
       ]
     );
 
-    invitedUser = {
-      id: userInsertResult.rows[0].id,
-      email: userInsertResult.rows[0].email,
-      lastName: userInsertResult.rows[0].last_name,
-      firstName: userInsertResult.rows[0].first_name,
-      middleName: userInsertResult.rows[0].middle_name,
-      role: roleName,
-      groupLeadUserId: userInsertResult.rows[0].group_lead_user_id,
-    };
-
-    const tokenData = await createPasswordSetupToken({
-      client,
-      userId: invitedUser.id,
-      ttlMinutes: inviteTtlHours * 60,
-    });
-
-    setupLink = buildPasswordSetupLink(tokenData.rawToken);
-    expiresAt = tokenData.expiresAt;
-
     await client.query("COMMIT");
+
+    const createdUser = userInsertResult.rows[0];
+
+    res.status(201).json({
+      message: "Пользователь создан. Передайте временный пароль сотруднику.",
+      user: {
+        id: createdUser.id,
+        username: createdUser.username,
+        lastName: createdUser.last_name,
+        firstName: createdUser.first_name,
+        middleName: createdUser.middle_name,
+        role: roleName,
+        groupLeadUserId: createdUser.group_lead_user_id,
+        mustChangePassword: createdUser.must_change_password,
+      },
+      tempPassword,
+    });
   } catch (error) {
     await client.query("ROLLBACK");
 
-    if (
-      error?.code === "23502" &&
-      (error?.column === "last_name" || error?.column === "first_name")
-    ) {
-      res.status(500).json({
-        message:
-          "База данных не готова для приглашений: поля last_name/first_name в таблице users должны допускать NULL. " +
-          "Примените миграции из backend/sql и перезапустите сервер.",
-      });
-      return;
-    }
-
     if (error?.code === "23505") {
       res.status(409).json({
-        message: "Пользователь с таким email уже существует.",
+        message: "Пользователь с таким username уже существует.",
       });
       return;
     }
 
-    console.error("Не удалось создать приглашение:", error);
+    console.error("Не удалось создать пользователя:", error);
     res.status(500).json({
-      message: "Не удалось создать приглашение.",
+      message: "Не удалось создать пользователя.",
     });
-    return;
   } finally {
     client.release();
   }
-
-  try {
-    await sendPasswordSetupEmail({
-      email,
-      setupLink,
-      expiresAt,
-      isInvite: true,
-    });
-  } catch (error) {
-    console.error("Не удалось отправить письмо с приглашением:", error);
-    res.status(502).json({
-      message: "Пользователь создан, но письмо с приглашением не отправлено.",
-      invitedUser,
-      ...(showInviteLinkInResponse ? { inviteLink: setupLink } : {}),
-    });
-    return;
-  }
-
-  res.status(201).json({
-    message: "Приглашение успешно отправлено.",
-    invitedUser,
-    ...(showInviteLinkInResponse ? { inviteLink: setupLink } : {}),
-  });
 });
 
-app.post(
-  "/api/owner/users/:userId/password-link",
-  requireOwner,
-  async (req, res) => {
-    const userId = parseUserId(req.params?.userId);
+app.post("/api/owner/users/:userId/reset-password", requireOwner, async (req, res) => {
+  const userId = parseUserId(req.params?.userId);
 
-    if (!userId) {
-      res.status(400).json({
-        message: "Некорректный userId.",
-      });
-      return;
-    }
-
-    const client = await pool.connect();
-
-    try {
-      await client.query("BEGIN");
-
-      const userResult = await client.query(
-        `
-        SELECT
-          u.id,
-          u.email,
-          u.last_name,
-          u.first_name,
-          u.middle_name,
-          r.name AS role
-        FROM users AS u
-        JOIN roles AS r ON r.id = u.role_id
-        WHERE u.id = $1
-        LIMIT 1
-      `,
-        [userId]
-      );
-
-      if (userResult.rowCount === 0) {
-        await client.query("ROLLBACK");
-        res.status(404).json({
-          message: "Пользователь не найден.",
-        });
-        return;
-      }
-
-      const targetUser = userResult.rows[0];
-
-      const tokenData = await createPasswordSetupToken({
-        client,
-        userId,
-        ttlMinutes: ownerPasswordLinkTtlMinutes,
-      });
-
-      await client.query("COMMIT");
-
-      const setupLink = buildPasswordSetupLink(tokenData.rawToken);
-
-      res.status(200).json({
-        message: "Ссылка для смены пароля сгенерирована.",
-        user: {
-          id: targetUser.id,
-          email: targetUser.email,
-          lastName: targetUser.last_name,
-          firstName: targetUser.first_name,
-          middleName: targetUser.middle_name,
-          role: targetUser.role,
-        },
-        setupLink,
-        expiresAt: tokenData.expiresAt.toISOString(),
-      });
-    } catch (error) {
-      await client.query("ROLLBACK");
-      console.error("Не удалось сгенерировать ссылку для смены пароля:", error);
-      res.status(500).json({
-        message: "Не удалось сгенерировать ссылку для смены пароля.",
-      });
-    } finally {
-      client.release();
-    }
-  }
-);
-
-app.get("/api/password-setup/session", async (req, res) => {
-  const token = normalizeToken(req.query?.token);
-
-  if (!token) {
+  if (!userId) {
     res.status(400).json({
-      message: "Требуется token.",
+      message: "Некорректный userId.",
     });
     return;
   }
 
-  const tokenHash = hashInviteToken(token);
+  const tempPassword = generateTempPassword();
+  const nextHash = hashPassword(tempPassword);
 
   try {
     const result = await pool.query(
       `
-        SELECT
-          pst.id,
-          pst.expires_at,
-          pst.used_at,
-          u.email,
-          u.last_name,
-          u.first_name,
-          u.middle_name,
-          r.name AS role
-        FROM password_setup_tokens AS pst
-        JOIN users AS u ON u.id = pst.user_id
-        JOIN roles AS r ON r.id = u.role_id
-        WHERE pst.token_hash = $1
-        LIMIT 1
+        UPDATE users
+        SET
+          password_hash = $1,
+          must_change_password = TRUE,
+          updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, username
       `,
-      [tokenHash]
+      [nextHash, userId]
     );
 
     if (result.rowCount === 0) {
       res.status(404).json({
-        message: "Ссылка для установки пароля не найдена.",
-      });
-      return;
-    }
-
-    const tokenRecord = result.rows[0];
-
-    if (tokenRecord.used_at) {
-      res.status(410).json({
-        message: "Эта ссылка уже использована.",
-      });
-      return;
-    }
-
-    if (new Date(tokenRecord.expires_at).getTime() <= Date.now()) {
-      res.status(410).json({
-        message: "Срок действия ссылки истек.",
+        message: "Пользователь не найден.",
       });
       return;
     }
 
     res.status(200).json({
-      session: {
-        email: tokenRecord.email,
-        lastName: tokenRecord.last_name,
-        firstName: tokenRecord.first_name,
-        middleName: tokenRecord.middle_name,
-        role: tokenRecord.role,
-        expiresAt: new Date(tokenRecord.expires_at).toISOString(),
-      },
+      message: "Временный пароль создан. Передайте его сотруднику.",
+      user: result.rows[0],
+      tempPassword,
     });
   } catch (error) {
-    console.error("Не удалось проверить токен установки пароля:", error);
+    console.error("Не удалось сбросить пароль:", error);
     res.status(500).json({
-      message: "Не удалось проверить токен установки пароля.",
+      message: "Не удалось сбросить пароль.",
     });
-  }
-});
-
-app.post("/api/password-setup/complete", async (req, res) => {
-  const token = normalizeToken(req.body?.token);
-  const password =
-    typeof req.body?.password === "string" ? req.body.password : "";
-  const lastName = normalizeOptionalText(req.body?.lastName);
-  const firstName = normalizeOptionalText(req.body?.firstName);
-  const middleName = normalizeOptionalText(req.body?.middleName);
-
-  if (!token || !password) {
-    res.status(400).json({
-      message: "Поля token и password обязательны.",
-    });
-    return;
-  }
-
-  const passwordError = validatePassword(password);
-  if (passwordError) {
-    res.status(400).json({
-      message: passwordError,
-    });
-    return;
-  }
-
-  const tokenHash = hashInviteToken(token);
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const tokenResult = await client.query(
-      `
-        SELECT
-          id,
-          user_id,
-          expires_at,
-          used_at
-        FROM password_setup_tokens
-        WHERE token_hash = $1
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [tokenHash]
-    );
-
-    if (tokenResult.rowCount === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({
-        message: "Ссылка для установки пароля не найдена.",
-      });
-      return;
-    }
-
-    const tokenRecord = tokenResult.rows[0];
-
-    if (tokenRecord.used_at) {
-      await client.query("ROLLBACK");
-      res.status(410).json({
-        message: "Эта ссылка уже использована.",
-      });
-      return;
-    }
-
-    if (new Date(tokenRecord.expires_at).getTime() <= Date.now()) {
-      await client.query("ROLLBACK");
-      res.status(410).json({
-        message: "Срок действия ссылки истек.",
-      });
-      return;
-    }
-
-    const userNameResult = await client.query(
-      `
-        SELECT
-          last_name,
-          first_name
-        FROM users
-        WHERE id = $1
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [tokenRecord.user_id]
-    );
-
-    if (userNameResult.rowCount === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({
-        message: "Пользователь для этой ссылки не найден.",
-      });
-      return;
-    }
-
-    const existingNames = userNameResult.rows[0];
-    const effectiveLastName = lastName ?? existingNames.last_name;
-    const effectiveFirstName = firstName ?? existingNames.first_name;
-
-    if (!effectiveLastName || !effectiveFirstName) {
-      await client.query("ROLLBACK");
-      res.status(400).json({
-        message: "Укажите фамилию и имя.",
-      });
-      return;
-    }
-
-    const nextPasswordHash = hashPassword(password);
-
-    const updateUserResult = await client.query(
-      `
-        UPDATE users
-        SET
-          password_hash = $1,
-          last_name = $2,
-          first_name = $3,
-          middle_name = COALESCE($4, middle_name),
-          updated_at = NOW()
-        WHERE id = $5
-      `,
-      [
-        nextPasswordHash,
-        effectiveLastName,
-        effectiveFirstName,
-        middleName,
-        tokenRecord.user_id,
-      ]
-    );
-
-    if (updateUserResult.rowCount === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({
-        message: "Пользователь для этой ссылки не найден.",
-      });
-      return;
-    }
-
-    await client.query(
-      `
-        UPDATE password_setup_tokens
-        SET
-          used_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [tokenRecord.id]
-    );
-
-    await client.query(
-      `
-        UPDATE password_setup_tokens
-        SET
-          used_at = NOW(),
-          updated_at = NOW()
-        WHERE user_id = $1
-          AND used_at IS NULL
-          AND id <> $2
-      `,
-      [tokenRecord.user_id, tokenRecord.id]
-    );
-
-    await client.query("COMMIT");
-
-    res.status(200).json({
-      message: "Пароль успешно установлен. Теперь можно войти.",
-    });
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Не удалось завершить установку пароля:", error);
-    res.status(500).json({
-      message: "Не удалось завершить установку пароля.",
-    });
-  } finally {
-    client.release();
   }
 });
 
 const start = async () => {
-  await ensureInviteSchemaCompatibility();
-
   app.listen(port, () => {
     console.log(`Сервер запущен на порту ${port}`);
   });

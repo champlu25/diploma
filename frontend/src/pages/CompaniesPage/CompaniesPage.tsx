@@ -436,10 +436,10 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const formatTransferTargetLabel = (user: User): string => {
     const name = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ");
     if (!name) {
-      return user.email;
+      return user.username;
     }
 
-    return `${name} (${user.email})`;
+    return `${name} (${user.username})`;
   };
 
   const openTransferModal = async (company: Company) => {
@@ -449,7 +449,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
     setError(null);
     setTransferCompanyCandidate(company);
-    setTransferTargetUserId(String(company.ownerUserId));
+    setTransferTargetUserId(String(company.managerUserId));
     setIsTransferModalOpen(true);
 
     if (transferTargets) {
@@ -504,7 +504,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const canManageCompany = (company: Company): boolean =>
     currentUser.role === "owner" ||
     currentUser.role === "group_lead" ||
-    company.ownerUserId === currentUser.id;
+    company.managerUserId === currentUser.id;
 
   const showManagerColumn = currentUser.role !== "manager";
 
@@ -557,9 +557,6 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           />
         </div>
         <div className={styles.filtersActions}>
-          <IconButton onClick={() => void loadCompanies()} title="Обновить">
-            <Icon name="refresh" size={18} />
-          </IconButton>
           <IconButton
             onClick={() => {
               setError(null);
@@ -582,7 +579,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               </Th>
               {showManagerColumn && (
                 <Th style={{ width: "14%" }}>
-                  Владелец
+                  Менеджер
                 </Th>
               )}
               <Th style={{ width: "9%" }}>
@@ -633,7 +630,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                     )}
                   </Td>
 
-                  {showManagerColumn && <Td>{company.ownerEmail}</Td>}
+                  {showManagerColumn && <Td>{company.managerName}</Td>}
 
                   <Td>
                     {isEditing ? (
@@ -986,7 +983,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         <form className={styles.modalForm} onSubmit={handleTransferSubmit}>
           <InputField label="Компания" value={transferCompanyCandidate?.name ?? ""} disabled />
           <InputField label="ИНН" value={transferCompanyCandidate?.inn ?? ""} disabled />
-          <InputField label="Текущий владелец" value={transferCompanyCandidate?.ownerEmail ?? ""} disabled />
+          <InputField label="Текущий менеджер" value={transferCompanyCandidate?.managerName ?? ""} disabled />
 
           <SelectField
             label="Передать пользователю"

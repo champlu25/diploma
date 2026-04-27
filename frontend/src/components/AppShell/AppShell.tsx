@@ -1,8 +1,10 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import type { AuthUser } from "../../types/user";
 import { getRoleLabel } from "../../utils/roles";
 import { Alert } from "../ui/Alert/Alert";
+import { ChangePasswordModal } from "../ChangePasswordModal/ChangePasswordModal";
 import { IconButton } from "../ui/IconButton/IconButton";
 import { Icon } from "../ui/Icon/Icon";
 import styles from "./AppShell.module.scss";
@@ -11,15 +13,28 @@ interface AppShellProps {
   currentUser: AuthUser;
   onLogout: () => Promise<void>;
   sessionError: string | null;
+  onPasswordChanged?: () => void;
 }
 
-export function AppShell({ currentUser, onLogout, sessionError }: AppShellProps) {
+export function AppShell({
+  currentUser,
+  onLogout,
+  sessionError,
+  onPasswordChanged,
+}: AppShellProps) {
   const location = useLocation();
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const homeLabel = currentUser.role === "owner" ? "Пользователи" : "Главная";
   const isHomeActive = location.pathname === "/";
   const isCompaniesActive = location.pathname.startsWith("/companies");
   const isDealsActive = location.pathname.startsWith("/deals");
   const homeIcon = currentUser.role === "owner" ? "users" : "home";
+
+  useEffect(() => {
+    if (currentUser.mustChangePassword) {
+      setIsPasswordModalOpen(true);
+    }
+  }, [currentUser.mustChangePassword]);
 
   return (
     <div className={styles.shell}>
@@ -46,7 +61,7 @@ export function AppShell({ currentUser, onLogout, sessionError }: AppShellProps)
 
         <div className={styles.user}>
           <div className={styles.meta}>
-            <div className={styles.email}>{currentUser.email}</div>
+            <div className={styles.email}>{currentUser.username}</div>
             <div className={styles.role}>{getRoleLabel(currentUser.role)}</div>
           </div>
           <IconButton
@@ -61,8 +76,19 @@ export function AppShell({ currentUser, onLogout, sessionError }: AppShellProps)
 
       <main className={styles.main}>
         {sessionError && <Alert tone="error">{sessionError}</Alert>}
-        <Outlet />
+        <Outlet
+          context={{
+            openChangePassword: () => setIsPasswordModalOpen(true),
+          }}
+        />
       </main>
+
+      <ChangePasswordModal
+        currentUser={currentUser}
+        open={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        onPasswordChanged={onPasswordChanged}
+      />
     </div>
   );
 }

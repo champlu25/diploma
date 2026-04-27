@@ -1,7 +1,7 @@
 export interface Company {
   id: number;
-  ownerUserId: number;
-  ownerEmail: string;
+  managerUserId: number;
+  managerName: string;
   name: string;
   inn: string;
   contactName: string | null;

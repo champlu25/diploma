@@ -5,16 +5,16 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
-  createOwnerPasswordLink,
+  createUser,
   getUsers,
-  inviteUser,
-  type InviteRole,
+  resetUserPassword,
+  type CreateUserRole,
 } from "../../api/usersApi";
 import type { AuthUser, User } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { getRoleLabel } from "../../utils/roles";
-import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Badge } from "../../components/ui/Badge/Badge";
@@ -22,32 +22,49 @@ import { Button } from "../../components/ui/Button/Button";
 import { Divider } from "../../components/ui/Divider/Divider";
 import { InputField, SelectField } from "../../components/ui/Field/Field";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
+import { Modal } from "../../components/ui/Modal/Modal";
 import styles from "./AdminPage.module.scss";
 
 interface AdminPageProps {
   currentUser: AuthUser;
 }
 
+interface AppShellOutletContext {
+  openChangePassword: () => void;
+}
+
 export function AdminPage({ currentUser }: AdminPageProps) {
+  const { openChangePassword } = useOutletContext<AppShellOutletContext>();
   const [users, setUsers] = useState<User[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState<string | null>(null);
 
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<InviteRole>("manager");
-  const [inviteGroupLeadUserId, setInviteGroupLeadUserId] =
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createUsername, setCreateUsername] = useState("");
+  const [createRole, setCreateRole] = useState<CreateUserRole>("manager");
+  const [createGroupLeadUserId, setCreateGroupLeadUserId] =
     useState<string>("");
-  const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
-  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+  const [createLastName, setCreateLastName] = useState("");
+  const [createFirstName, setCreateFirstName] = useState("");
+  const [createMiddleName, setCreateMiddleName] = useState("");
+  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const [isRowActionLoading, setIsRowActionLoading] = useState<number | null>(
     null
   );
   const [rowActionError, setRowActionError] = useState<string | null>(null);
-  const [rowActionSuccess, setRowActionSuccess] = useState<string | null>(null);
-  const [manualPasswordLink, setManualPasswordLink] = useState<string | null>(
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordModalTitle, setPasswordModalTitle] = useState<string | null>(
+    null
+  );
+  const [passwordModalKind, setPasswordModalKind] = useState<
+    "create" | "reset"
+  >("create");
+  const [passwordModalUsername, setPasswordModalUsername] = useState<
+    string | null
+  >(null);
+  const [passwordModalValue, setPasswordModalValue] = useState<string | null>(
     null
   );
 
@@ -75,87 +92,89 @@ export function AdminPage({ currentUser }: AdminPageProps) {
     void loadUsers();
   }, [loadUsers]);
 
-  useEffect(() => {
-    if (
-      inviteRole === "manager" &&
-      !inviteGroupLeadUserId &&
-      groupLeads.length > 0
-    ) {
-      setInviteGroupLeadUserId(String(groupLeads[0].id));
-    }
-  }, [groupLeads, inviteRole, inviteGroupLeadUserId]);
+  const openPasswordModal = (params: {
+    title: string;
+    username: string;
+    tempPassword: string;
+    kind: "create" | "reset";
+  }) => {
+    setPasswordModalTitle(params.title);
+    setPasswordModalUsername(params.username);
+    setPasswordModalValue(params.tempPassword);
+    setPasswordModalKind(params.kind);
+    setPasswordModalOpen(true);
+  };
 
-  const handleInviteSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!inviteEmail.trim()) {
-      setInviteError("Введите email сотрудника.");
+    if (!createUsername.trim()) {
+      setCreateError("Введите логин сотрудника.");
       return;
     }
 
-    if (inviteRole === "manager" && !inviteGroupLeadUserId) {
-      setInviteError("Для менеджера нужно выбрать руководителя группы.");
+    if (createRole === "manager" && !createGroupLeadUserId) {
+      setCreateError("Для менеджера нужно выбрать руководителя группы.");
       return;
     }
 
     try {
-      setIsInviteSubmitting(true);
-      setInviteError(null);
-      setInviteSuccess(null);
-      setLastInviteLink(null);
+      setIsCreateSubmitting(true);
+      setCreateError(null);
 
-      const groupLeadUserId =
-        inviteRole === "manager" ? Number(inviteGroupLeadUserId) : null;
-      const result = await inviteUser(
-        inviteEmail.trim(),
-        inviteRole,
-        groupLeadUserId
-      );
+      const result = await createUser({
+        username: createUsername.trim(),
+        role: createRole,
+        groupLeadUserId:
+          createRole === "manager" ? Number(createGroupLeadUserId) : null,
+        lastName: createLastName.trim(),
+        firstName: createFirstName.trim(),
+        middleName: createMiddleName.trim(),
+      });
 
-      setInviteSuccess(result.message);
-      setLastInviteLink(result.inviteLink ?? null);
-      setInviteEmail("");
+      openPasswordModal({
+        title: "Временный пароль создан",
+        username: result.user.username,
+        tempPassword: result.tempPassword,
+        kind: "create",
+      });
+
+      setCreateModalOpen(false);
+      setCreateUsername("");
+      setCreateLastName("");
+      setCreateFirstName("");
+      setCreateMiddleName("");
+      setCreateRole("manager");
+      setCreateGroupLeadUserId(groupLeads[0] ? String(groupLeads[0].id) : "");
+
       await loadUsers();
     } catch (requestError) {
-      setInviteError(
-        getApiErrorMessage(requestError, "Не удалось отправить приглашение.")
+      setCreateError(
+        getApiErrorMessage(requestError, "Не удалось создать пользователя.")
       );
     } finally {
-      setIsInviteSubmitting(false);
+      setIsCreateSubmitting(false);
     }
   };
 
-  const handleOpenPasswordPage = async (user: User) => {
+  const handleResetPassword = async (user: User) => {
     try {
       setIsRowActionLoading(user.id);
       setRowActionError(null);
-      setRowActionSuccess(null);
-      setManualPasswordLink(null);
 
-      const result = await createOwnerPasswordLink(user.id);
-      const popup = window.open(
-        result.setupLink,
-        "_blank",
-        "noopener,noreferrer"
-      );
+      const result = await resetUserPassword(user.id);
 
-      if (!popup) {
-        setManualPasswordLink(result.setupLink);
-        setRowActionError(
-          "Браузер заблокировал новую вкладку. Используйте ссылку ниже, чтобы открыть страницу настройки аккаунта."
-        );
-        return;
-      }
+      openPasswordModal({
+        title: "Сбросить пароль",
+        username: user.username,
+        tempPassword: result.tempPassword,
+        kind: "reset",
+      });
 
-      setRowActionSuccess(
-        `Страница настройки аккаунта открыта для ${result.user.email}.`
-      );
+      await loadUsers();
     } catch (requestError) {
       setRowActionError(
-        getApiErrorMessage(
-          requestError,
-          "Не удалось создать ссылку для настройки аккаунта."
-        )
+        getApiErrorMessage(requestError, "Не удалось сбросить пароль.")
       );
     } finally {
       setIsRowActionLoading(null);
@@ -163,97 +182,45 @@ export function AdminPage({ currentUser }: AdminPageProps) {
   };
 
   const usersMessages = useMemo(
-    () =>
-      Boolean(
-        usersError || rowActionError || rowActionSuccess || manualPasswordLink
-      ),
-    [manualPasswordLink, rowActionError, rowActionSuccess, usersError]
+    () => Boolean(usersError || rowActionError),
+    [rowActionError, usersError]
   );
 
   return (
     <div className={styles.page}>
       <PageHeader
         title="Администрирование"
-        subtitle={`Вы вошли как ${currentUser.email} (${getRoleLabel(currentUser.role)}).`}
+        subtitle={`Вы вошли как ${currentUser.username} (${getRoleLabel(currentUser.role)}).`}
       />
 
-      <h2 className={styles.sectionTitle}>Пригласить сотрудника</h2>
-      <form className={styles.inviteRow} onSubmit={handleInviteSubmit}>
-        <InputField
-          className={styles.inviteItem}
-          label="Эл. почта"
-          type="email"
-          value={inviteEmail}
-          onChange={(event) => setInviteEmail(event.target.value)}
-          disabled={isInviteSubmitting}
-          placeholder="employee@company.com"
-        />
-
-        <SelectField
-          className={styles.inviteItem}
-          label="Роль"
-          value={inviteRole}
-          onChange={(event) => {
-            const nextRole = event.target.value as InviteRole;
-            setInviteRole(nextRole);
-            if (nextRole === "group_lead") setInviteGroupLeadUserId("");
-          }}
-          disabled={isInviteSubmitting}
-          options={[
-            { value: "manager", label: "Менеджер" },
-            { value: "group_lead", label: "Руководитель группы" },
-          ]}
-        />
-
-        <SelectField
-          className={styles.inviteItem}
-          label="Руководитель группы"
-          value={inviteRole === "manager" ? inviteGroupLeadUserId : ""}
-          onChange={(event) => setInviteGroupLeadUserId(event.target.value)}
-          disabled={isInviteSubmitting || inviteRole !== "manager" || groupLeads.length === 0}
-          options={
-            inviteRole !== "manager"
-              ? [{ value: "", label: "Не требуется", disabled: true }]
-              : groupLeads.length === 0
-                ? [{ value: "", label: "Сначала создайте руководителя группы", disabled: true }]
-                : groupLeads.map((lead) => ({ value: String(lead.id), label: lead.email }))
-          }
-        />
-
-        <div className={styles.inviteButtonItem}>
-          <Button type="submit" fullWidth disabled={isInviteSubmitting}>
-            {isInviteSubmitting ? <Spinner size={20} /> : "Отправить приглашение"}
-          </Button>
-        </div>
-      </form>
-
-      <div className={styles.messages}>
-        {inviteError && <Alert tone="error">{inviteError}</Alert>}
-        {inviteSuccess && <Alert tone="success">{inviteSuccess}</Alert>}
-        {lastInviteLink && (
-          <div>
-            Ссылка приглашения:{" "}
-            <a
-              className={styles.link}
-              href={lastInviteLink}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {lastInviteLink}
-            </a>
-          </div>
-        )}
+      <div className={styles.topActions}>
+        <Button type="button" variant="ghost" onClick={openChangePassword}>
+          Сменить пароль
+        </Button>
       </div>
-
-      <Divider />
 
       <div className={styles.toolbar}>
         <h2 className={styles.sectionTitle} style={{ margin: 0 }}>
           Пользователи
         </h2>
-        <Button type="button" variant="text" onClick={() => void loadUsers()}>
-          Обновить
-        </Button>
+        <div className={styles.toolbarActions}>
+          <Button
+            type="button"
+            onClick={() => {
+              if (
+                createRole === "manager" &&
+                !createGroupLeadUserId &&
+                groupLeads.length > 0
+              ) {
+                setCreateGroupLeadUserId(String(groupLeads[0].id));
+              }
+
+              setCreateModalOpen(true);
+            }}
+          >
+            Создать сотрудника
+          </Button>
+        </div>
       </div>
 
       {isUsersLoading && (
@@ -267,87 +234,209 @@ export function AdminPage({ currentUser }: AdminPageProps) {
         <div className={styles.messages}>
           {usersError && <Alert tone="error">{usersError}</Alert>}
           {rowActionError && <Alert tone="error">{rowActionError}</Alert>}
-          {rowActionSuccess && <Alert tone="success">{rowActionSuccess}</Alert>}
-          {manualPasswordLink && (
-            <div>
-              Ручная ссылка для настройки аккаунта:{" "}
-              <a
-                className={styles.link}
-                href={manualPasswordLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {manualPasswordLink}
-              </a>
-            </div>
-          )}
         </div>
       )}
 
       {!isUsersLoading && !usersError && (
-        <DataTable>
-            <thead>
-              <Tr>
-                <Th style={{ width: "28%" }}>
-                  Почта
-                </Th>
-                <Th style={{ width: "28%" }}>
-                  ФИО
-                </Th>
-                <Th style={{ width: "18%" }}>
-                  Роль
-                </Th>
-                <Th style={{ width: "26%", textAlign: "left" }}>
-                  Действия
-                </Th>
-              </Tr>
-            </thead>
-            <tbody>
-              {users.length === 0 && (
-                <Tr>
-                  <Td colSpan={4} style={{ textAlign: "center", color: "var(--color-text-secondary)" }}>
-                    Пользователей пока нет.
-                  </Td>
-                </Tr>
-              )}
+        <div className={styles.usersGrid}>
+          {users.length === 0 && (
+            <div className={styles.emptyText}>Пользователей пока нет.</div>
+          )}
 
-              {users.map((user) => {
-                const isBusyPassword = isRowActionLoading === user.id;
-                const roleLabel = getRoleLabel(user.role);
+          {users.map((user) => {
+            const isBusyPassword = isRowActionLoading === user.id;
+            const roleLabel = getRoleLabel(user.role);
+            const fullName =
+              [user.lastName, user.firstName, user.middleName]
+                .filter(Boolean)
+                .join(" ") || "—";
 
-                return (
-                  <Tr key={user.id}>
-                    <Td>{user.email}</Td>
-                    <Td>
-                      {[user.lastName, user.firstName, user.middleName]
-                        .filter(Boolean)
-                        .join(" ") || "—"}
-                    </Td>
-                    <Td>
-                      <Badge>{roleLabel}</Badge>
-                    </Td>
-                    <Td>
-                      <Button
-                        className={styles.fullWidthButton}
-                        variant="ghost"
-                        onClick={() => void handleOpenPasswordPage(user)}
-                        disabled={isBusyPassword}
-                      >
-                        {isBusyPassword ? (
-                          <Spinner size={18} />
-                        ) : (
-                          "Настроить аккаунт"
-                        )}
-                      </Button>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </tbody>
-        </DataTable>
+            return (
+              <div key={user.id} className={styles.userCard}>
+                <div className={styles.userCardTop}>
+                  <div className={styles.userCardTitleRow}>
+                    <div className={styles.userCardUsername}>
+                      {user.username}
+                    </div>
+                    <Badge>{roleLabel}</Badge>
+                  </div>
+                  <div className={styles.userCardName}>{fullName}</div>
+
+                  {user.role === "manager" && user.groupLeadUsername && (
+                    <div className={styles.userCardMeta}>
+                      Руководитель:{" "}
+                      <strong>{user.groupLeadUsername}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.userCardActions}>
+                  <Button
+                    className={styles.fullWidthButton}
+                    variant="ghost"
+                    onClick={() => void handleResetPassword(user)}
+                    disabled={isBusyPassword || user.role === "owner"}
+                  >
+                    {isBusyPassword ? <Spinner size={18} /> : "Сбросить пароль"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
+      <Modal
+        open={createModalOpen}
+        title="Создать сотрудника"
+        onClose={() => setCreateModalOpen(false)}
+        className={styles.createModal}
+      >
+        <form className={styles.createForm} onSubmit={handleCreateSubmit} noValidate>
+          <InputField
+            label="Логин"
+            value={createUsername}
+            onChange={(event) => setCreateUsername(event.target.value)}
+            disabled={isCreateSubmitting}
+            placeholder="например: ivanov"
+            required
+          />
+
+          <SelectField
+            label="Роль"
+            value={createRole}
+            onChange={(event) => {
+              const nextRole = event.target.value as CreateUserRole;
+              setCreateRole(nextRole);
+              if (nextRole === "group_lead") {
+                setCreateGroupLeadUserId("");
+                return;
+              }
+
+              if (!createGroupLeadUserId && groupLeads.length > 0) {
+                setCreateGroupLeadUserId(String(groupLeads[0].id));
+              }
+            }}
+            disabled={isCreateSubmitting}
+            options={[
+              { value: "manager", label: "Менеджер" },
+              { value: "group_lead", label: "Руководитель группы" },
+            ]}
+          />
+
+          <SelectField
+            label="Руководитель группы"
+            value={createRole === "manager" ? createGroupLeadUserId : ""}
+            onChange={(event) => setCreateGroupLeadUserId(event.target.value)}
+            disabled={
+              isCreateSubmitting || createRole !== "manager" || groupLeads.length === 0
+            }
+            options={
+              createRole !== "manager"
+                ? [{ value: "", label: "Не требуется", disabled: true }]
+                : groupLeads.length === 0
+                  ? [
+                      {
+                        value: "",
+                        label: "Сначала создайте руководителя группы",
+                        disabled: true,
+                      },
+                    ]
+                  : groupLeads.map((lead) => ({
+                      value: String(lead.id),
+                      label: lead.username,
+                    }))
+            }
+          />
+
+          <div className={styles.createNameRow}>
+            <InputField
+              label="Фамилия"
+              value={createLastName}
+              onChange={(event) => setCreateLastName(event.target.value)}
+              disabled={isCreateSubmitting}
+              placeholder="необязательно"
+            />
+
+            <InputField
+              label="Имя"
+              value={createFirstName}
+              onChange={(event) => setCreateFirstName(event.target.value)}
+              disabled={isCreateSubmitting}
+              placeholder="необязательно"
+            />
+
+            <InputField
+              label="Отчество"
+              value={createMiddleName}
+              onChange={(event) => setCreateMiddleName(event.target.value)}
+              disabled={isCreateSubmitting}
+              placeholder="необязательно"
+            />
+          </div>
+
+          {createError && <Alert tone="error">{createError}</Alert>}
+
+          <Divider />
+
+          <div className={styles.createActions}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setCreateModalOpen(false)}
+              disabled={isCreateSubmitting}
+            >
+              Отмена
+            </Button>
+            <Button type="submit" disabled={isCreateSubmitting}>
+              {isCreateSubmitting ? <Spinner size={20} /> : "Создать"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       {/* модал выбора руководителя не нужен: выбираем по почте */}
+      <Modal
+        open={passwordModalOpen}
+        title={passwordModalTitle ?? "Временный пароль"}
+        onClose={() => setPasswordModalOpen(false)}
+        className={styles.setupModal}
+      >
+        <div className={styles.setupTop}>
+          {passwordModalKind === "create" && (
+            <div className={styles.setupHint}>
+              Передайте сотруднику логин и временный пароль. При первом входе система попросит сменить пароль.
+            </div>
+          )}
+
+          <div>
+            Логин: <strong>{passwordModalUsername ?? "—"}</strong>
+          </div>
+
+          <div>
+            Временный пароль:{" "}
+            <strong className={styles.link}>{passwordModalValue ?? "—"}</strong>
+          </div>
+
+          {passwordModalKind === "create" && passwordModalValue && (
+            <div className={styles.setupLinks}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(passwordModalValue);
+                  } catch {
+                    // ignore
+                  }
+                }}
+              >
+                Скопировать пароль
+              </Button>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
