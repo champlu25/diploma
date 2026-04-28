@@ -1372,8 +1372,8 @@ app.get("/api/deals", requireAuth, async (req, res) => {
           d.pl_cost_rub,
           d.leasing_company_id,
           lc.name AS leasing_company_name,
-          d.advance_percent::DOUBLE PRECISION AS advance_percent,
-          d.advance_total_rub,
+          d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
+          ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
           d.deal_stage_id,
           st.name AS deal_stage_name,
           d.comment,
@@ -1420,10 +1420,7 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
   const leasingCompanyId = parseUserId(req.body?.leasingCompanyId);
   const dealStageId = parseUserId(req.body?.dealStageId);
   const plCostRub = normalizeRequiredNonNegativeInteger(req.body?.plCostRub);
-  const advanceTotalRub = normalizeRequiredNonNegativeInteger(
-    req.body?.advanceTotalRub
-  );
-  const advancePercent = normalizeRequiredPercent(req.body?.advancePercent);
+  const agentFeePercent = normalizeRequiredPercent(req.body?.agentFeePercent);
 
   if (!need) {
     res.status(400).json({
@@ -1460,14 +1457,7 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
     return;
   }
 
-  if (advanceTotalRub === null) {
-    res.status(400).json({
-      message: "Некорректный общий АВ.",
-    });
-    return;
-  }
-
-  if (advancePercent === null) {
+  if (agentFeePercent === null) {
     res.status(400).json({
       message: "Некорректный АВ, %.",
     });
@@ -1495,8 +1485,8 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
         d.pl_cost_rub,
         d.leasing_company_id,
         lc.name AS leasing_company_name,
-        d.advance_percent::DOUBLE PRECISION AS advance_percent,
-        d.advance_total_rub,
+        d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
+        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
         d.deal_stage_id,
         st.name AS deal_stage_name,
         d.comment,
@@ -1562,8 +1552,7 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
           completed_at,
           pl_cost_rub,
           leasing_company_id,
-          advance_percent,
-          advance_total_rub,
+          agent_fee_percent,
           deal_stage_id,
           comment
         )
@@ -1577,24 +1566,11 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
           $5,
           $6,
           $7,
-          $8,
-          $9
+          $8
         )
         RETURNING
           id,
-          company_id,
-          need,
-          deal_status_id,
-          deal_lifecycle_status_id,
-          completed_at,
-          pl_cost_rub,
-          leasing_company_id,
-          advance_percent,
-          advance_total_rub,
-          deal_stage_id,
-          comment,
-          created_at,
-          updated_at
+          company_id
       `,
       [
         companyId,
@@ -1602,8 +1578,7 @@ app.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => {
         dealStatusId,
         plCostRub,
         leasingCompanyId,
-        advancePercent,
-        advanceTotalRub,
+        agentFeePercent,
         dealStageId,
         comment,
       ]
@@ -1689,28 +1664,15 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
     fieldsToUpdate.leasing_company_id = leasingCompanyId;
   }
 
-  if (Object.prototype.hasOwnProperty.call(req.body, "advancePercent")) {
-    const advancePercent = normalizeRequiredPercent(req.body?.advancePercent);
-    if (advancePercent === null) {
+  if (Object.prototype.hasOwnProperty.call(req.body, "agentFeePercent")) {
+    const agentFeePercent = normalizeRequiredPercent(req.body?.agentFeePercent);
+    if (agentFeePercent === null) {
       res.status(400).json({
         message: "Некорректный АВ, %.",
       });
       return;
     }
-    fieldsToUpdate.advance_percent = advancePercent;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(req.body, "advanceTotalRub")) {
-    const advanceTotalRub = normalizeRequiredNonNegativeInteger(
-      req.body?.advanceTotalRub
-    );
-    if (advanceTotalRub === null) {
-      res.status(400).json({
-        message: "Некорректный общий АВ.",
-      });
-      return;
-    }
-    fieldsToUpdate.advance_total_rub = advanceTotalRub;
+    fieldsToUpdate.agent_fee_percent = agentFeePercent;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "dealStageId")) {
@@ -1757,8 +1719,8 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
         d.pl_cost_rub,
         d.leasing_company_id,
         lc.name AS leasing_company_name,
-        d.advance_percent::DOUBLE PRECISION AS advance_percent,
-        d.advance_total_rub,
+        d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
+        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
         d.deal_stage_id,
         st.name AS deal_stage_name,
         d.comment,
@@ -1834,8 +1796,7 @@ app.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
           deal_status_id,
           pl_cost_rub,
           leasing_company_id,
-          advance_percent,
-          advance_total_rub,
+          agent_fee_percent,
           deal_stage_id,
           comment,
           created_at,
@@ -1908,8 +1869,8 @@ app.patch("/api/deals/:dealId/lifecycle-status", requireAuth, async (req, res) =
         d.pl_cost_rub,
         d.leasing_company_id,
         lc.name AS leasing_company_name,
-        d.advance_percent::DOUBLE PRECISION AS advance_percent,
-        d.advance_total_rub,
+        d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
+        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
         d.deal_stage_id,
         st.name AS deal_stage_name,
         d.comment,

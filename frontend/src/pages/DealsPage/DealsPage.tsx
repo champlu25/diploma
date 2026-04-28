@@ -31,8 +31,7 @@ const emptyForm: DealFormValues = {
   dealStatusId: "",
   plCostRub: "",
   leasingCompanyId: "",
-  advancePercent: "",
-  advanceTotalRub: "",
+  agentFeePercent: "",
   dealStageId: "",
   comment: "",
 };
@@ -60,17 +59,13 @@ const validateDealForm = (values: DealFormValues): DealValidationErrors => {
     errors.plCostRub = "Укажите стоимость в рублях";
   }
 
-  if (!/^\d+(\.\d+)?$/.test(values.advancePercent.trim())) {
-    errors.advancePercent = "Укажите процент";
+  if (!/^\d+(\.\d+)?$/.test(values.agentFeePercent.trim())) {
+    errors.agentFeePercent = "Укажите процент";
   } else {
-    const percent = Number(values.advancePercent);
+    const percent = Number(values.agentFeePercent);
     if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      errors.advancePercent = "0–100";
+      errors.agentFeePercent = "0–100";
     }
-  }
-
-  if (!/^\d+$/.test(values.advanceTotalRub.trim())) {
-    errors.advanceTotalRub = "Укажите сумму в рублях";
   }
 
   return errors;
@@ -221,8 +216,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       dealStatusId: String(deal.dealStatusId),
       plCostRub: String(deal.plCostRub),
       leasingCompanyId: String(deal.leasingCompanyId),
-      advancePercent: String(deal.advancePercent),
-      advanceTotalRub: String(deal.advanceTotalRub),
+      agentFeePercent: String(deal.agentFeePercent),
       dealStageId: String(deal.dealStageId),
       comment: deal.comment ?? "",
     });
@@ -293,8 +287,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         dealStatusId: String(detailsDeal.dealStatusId),
         plCostRub: String(detailsDeal.plCostRub),
         leasingCompanyId: String(detailsDeal.leasingCompanyId),
-        advancePercent: String(detailsDeal.advancePercent),
-        advanceTotalRub: String(detailsDeal.advanceTotalRub),
+        agentFeePercent: String(detailsDeal.agentFeePercent),
         dealStageId: String(detailsDeal.dealStageId),
       };
 
@@ -408,7 +401,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <Th style={{ width: "11%" }}>Стоимость ПЛ</Th>
             <Th style={{ width: "11%" }}>Лизинговая</Th>
             <Th style={{ width: "7%" }}>АВ, %</Th>
-            <Th style={{ width: "11%" }}>Общий АВ</Th>
+            <Th style={{ width: "11%" }}>АВ, руб.</Th>
             <Th style={{ width: "14%" }}>Этап сделки</Th>
             <Th style={{ width: "13%" }}>Менеджер</Th>
             <Th style={{ width: "12%" }}>Создание</Th>
@@ -491,32 +484,27 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                   <Td>
                     {isEditing ? (
                       <input
-                        className={`${styles.cellInput} ${editErrors.advancePercent ? styles.cellError : ""}`}
-                        value={editForm.advancePercent}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, advancePercent: event.target.value }))}
+                        className={`${styles.cellInput} ${editErrors.agentFeePercent ? styles.cellError : ""}`}
+                        value={editForm.agentFeePercent}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))}
                         disabled={isEditSubmitting}
                         inputMode="decimal"
-                        aria-invalid={Boolean(editErrors.advancePercent) || undefined}
-                        title={editErrors.advancePercent}
+                        aria-invalid={Boolean(editErrors.agentFeePercent) || undefined}
+                        title={editErrors.agentFeePercent}
                       />
                     ) : (
-                      formatNumberLike(deal.advancePercent)
+                      formatNumberLike(deal.agentFeePercent)
                     )}
                   </Td>
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={`${styles.cellInput} ${editErrors.advanceTotalRub ? styles.cellError : ""}`}
-                        value={editForm.advanceTotalRub}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, advanceTotalRub: event.target.value }))}
-                        disabled={isEditSubmitting}
-                        inputMode="numeric"
-                        aria-invalid={Boolean(editErrors.advanceTotalRub) || undefined}
-                        title={editErrors.advanceTotalRub}
-                      />
-                    ) : (
-                      formatNumberLike(deal.advanceTotalRub)
-                    )}
+                    {isEditing
+                      ? formatNumberLike(
+                          Math.round(
+                            (Number(editForm.plCostRub) || 0) *
+                              ((Number(editForm.agentFeePercent) || 0) / 100),
+                          ),
+                        )
+                      : formatNumberLike(deal.advanceTotalRub)}
                   </Td>
                   <Td>
                     {isEditing ? (

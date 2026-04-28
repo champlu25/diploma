@@ -278,14 +278,13 @@ const seedTestData = async (client) => {
         completed_at,
         pl_cost_rub,
         leasing_company_id,
-        advance_percent,
-        advance_total_rub,
+        agent_fee_percent,
         deal_stage_id,
         comment
       )
       VALUES
-        ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10),
-        ($11, $12, $13, $14, NOW(), $15, $16, $17, $18, $19, $20)
+        ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9),
+        ($10, $11, $12, $13, NOW(), $14, $15, $16, $17, $18)
     `,
     [
       companyA.id,
@@ -295,7 +294,6 @@ const seedTestData = async (client) => {
       2_500_000,
       vtbLeasingId,
       20,
-      500_000,
       negotiationStageId,
       "Первая тестовая сделка",
       companyB.id,
@@ -305,7 +303,6 @@ const seedTestData = async (client) => {
       6_800_000,
       sberLeasingId,
       10,
-      680_000,
       saleStageId,
       "Вторая тестовая сделка (реализована)",
     ],

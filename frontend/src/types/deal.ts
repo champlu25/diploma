@@ -14,7 +14,7 @@ export interface Deal {
   plCostRub: number;
   leasingCompanyId: number;
   leasingCompanyName: string;
-  advancePercent: number;
+  agentFeePercent: number;
   advanceTotalRub: number;
   dealStageId: number;
   dealStageName: string;
@@ -40,8 +40,7 @@ export interface DealFormValues {
   dealStatusId: string;
   plCostRub: string;
   leasingCompanyId: string;
-  advancePercent: string;
-  advanceTotalRub: string;
+  agentFeePercent: string;
   dealStageId: string;
   comment: string;
 }

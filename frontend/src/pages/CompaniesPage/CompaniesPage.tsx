@@ -70,8 +70,7 @@ const emptyDealForm: DealFormValues = {
   dealStatusId: "",
   plCostRub: "",
   leasingCompanyId: "",
-  advancePercent: "",
-  advanceTotalRub: "",
+  agentFeePercent: "",
   dealStageId: "",
   comment: "",
 };
@@ -99,17 +98,13 @@ const validateDealForm = (values: DealFormValues): DealValidationErrors => {
     errors.plCostRub = "Укажите стоимость в рублях";
   }
 
-  if (!/^\d+(\.\d+)?$/.test(values.advancePercent.trim())) {
-    errors.advancePercent = "Укажите процент";
+  if (!/^\d+(\.\d+)?$/.test(values.agentFeePercent.trim())) {
+    errors.agentFeePercent = "Укажите процент";
   } else {
-    const percent = Number(values.advancePercent);
+    const percent = Number(values.agentFeePercent);
     if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      errors.advancePercent = "0–100";
+      errors.agentFeePercent = "0–100";
     }
-  }
-
-  if (!/^\d+$/.test(values.advanceTotalRub.trim())) {
-    errors.advanceTotalRub = "Укажите сумму в рублях";
   }
 
   return errors;
@@ -934,21 +929,22 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
             <InputField
               label="АВ, %"
-              value={dealForm.advancePercent}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, advancePercent: event.target.value }))}
+              value={dealForm.agentFeePercent}
+              onChange={(event) => setDealForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))}
               required
-              error={dealErrors.advancePercent}
+              error={dealErrors.agentFeePercent}
               disabled={isDealSubmitting}
               inputMode="decimal"
             />
 
             <InputField
-              label="Общий АВ, ₽"
-              value={dealForm.advanceTotalRub}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, advanceTotalRub: event.target.value }))}
-              required
-              error={dealErrors.advanceTotalRub}
-              disabled={isDealSubmitting}
+              label="АВ, руб."
+              value={String(
+                Math.round(
+                  (Number(dealForm.plCostRub) || 0) * ((Number(dealForm.agentFeePercent) || 0) / 100),
+                ),
+              )}
+              disabled
               inputMode="numeric"
             />
 

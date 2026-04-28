@@ -174,7 +174,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       <div className={styles.grid}>
         <Card
           title="Показатели"
-          subtitle="Горячие/холодные и доход (Общий АВ)"
+          subtitle="Горячие/холодные и доход (АВ, руб.)"
           className={`${styles.card} ${styles.fullRow}`}
         >
           {isLoading ? (
@@ -193,7 +193,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                 />
               </div>
               <div className={styles.metricBlock}>
-                <div className={styles.metricTitle}>Доход (Общий АВ), ₽</div>
+                <div className={styles.metricTitle}>Доход (АВ, руб.), ₽</div>
                 <TwoSegmentBarChart
                   ariaLabel="Сравнение прогнозируемого и фактического дохода"
                   items={incomeItems}

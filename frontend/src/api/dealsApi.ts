@@ -17,7 +17,7 @@ interface DealDto {
   pl_cost_rub: number;
   leasing_company_id: number;
   leasing_company_name: string;
-  advance_percent: number;
+  agent_fee_percent: number;
   advance_total_rub: number;
   deal_stage_id: number;
   deal_stage_name: string;
@@ -62,7 +62,7 @@ const toDeal = (dto: DealDto): Deal => ({
   plCostRub: dto.pl_cost_rub,
   leasingCompanyId: dto.leasing_company_id,
   leasingCompanyName: dto.leasing_company_name,
-  advancePercent: dto.advance_percent,
+  agentFeePercent: dto.agent_fee_percent,
   advanceTotalRub: dto.advance_total_rub,
   dealStageId: dto.deal_stage_id,
   dealStageName: dto.deal_stage_name,
@@ -76,8 +76,7 @@ const toPayload = (values: DealFormValues) => ({
   dealStatusId: values.dealStatusId,
   plCostRub: values.plCostRub,
   leasingCompanyId: values.leasingCompanyId,
-  advancePercent: values.advancePercent,
-  advanceTotalRub: values.advanceTotalRub,
+  agentFeePercent: values.agentFeePercent,
   dealStageId: values.dealStageId,
   comment: values.comment,
 });
