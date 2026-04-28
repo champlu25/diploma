@@ -4,6 +4,7 @@ import { getCurrentUser, logout } from "../api/authApi";
 import { AppShell } from "../components/AppShell/AppShell";
 import { AdminPage } from "../pages/AdminPage/AdminPage";
 import { CompaniesPage } from "../pages/CompaniesPage/CompaniesPage";
+import { DashboardsPage } from "../pages/DashboardsPage/DashboardsPage";
 import { DealsPage } from "../pages/DealsPage/DealsPage";
 import { LoginPage } from "../pages/LoginPage/LoginPage";
 import { UserHomePage } from "../pages/UserHomePage/UserHomePage";
@@ -134,6 +135,16 @@ function App() {
                 <Navigate to="/" replace />
               ) : (
                 <DealsPage currentUser={currentUser!} />
+              )
+            }
+          />
+          <Route
+            path="dashboards"
+            element={
+              currentUser?.mustChangePassword ? (
+                <Navigate to="/" replace />
+              ) : (
+                <DashboardsPage currentUser={currentUser!} />
               )
             }
           />

@@ -1,0 +1,70 @@
+.root {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 64px;
+  align-items: center;
+  max-width: 560px;
+}
+
+.svg {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+}
+
+.track {
+  stroke: rgba(148, 163, 184, 0.35);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.legendRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 16px;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color);
+}
+
+.text {
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  color: rgba(15, 23, 42, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  padding: 14px 4px;
+  color: rgba(15, 23, 42, 0.7);
+  font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  .root {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+}

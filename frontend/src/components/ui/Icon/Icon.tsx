@@ -14,6 +14,7 @@ import buildingsFillSvg from "../../../assets/icons/buildings-fill.svg?raw";
 import houseFillSvg from "../../../assets/icons/house-fill.svg?raw";
 import briefcaseFillSvg from "../../../assets/icons/briefcase-fill.svg?raw";
 import lockSvg from "../../../assets/icons/lock.svg?raw";
+import pieChartFillSvg from "../../../assets/icons/pie-chart-fill.svg?raw";
 
 const ICONS = {
   plus: plusSvg,
@@ -29,6 +30,7 @@ const ICONS = {
   deals: briefcaseFillSvg,
   home: houseFillSvg,
   lock: lockSvg,
+  dashboards: pieChartFillSvg,
 } as const;
 
 export type IconName = keyof typeof ICONS;

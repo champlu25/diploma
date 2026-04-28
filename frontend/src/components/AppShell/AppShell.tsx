@@ -28,6 +28,7 @@ export function AppShell({
   const isHomeActive = location.pathname === "/";
   const isCompaniesActive = location.pathname.startsWith("/companies");
   const isDealsActive = location.pathname.startsWith("/deals");
+  const isDashboardsActive = location.pathname.startsWith("/dashboards");
   const homeIcon = currentUser.role === "owner" ? "users" : "home";
 
   useEffect(() => {
@@ -56,6 +57,13 @@ export function AppShell({
           <Link to="/deals" className={clsx(styles.link, isDealsActive && styles.active)}>
             <Icon name="deals" size={16} />
             Сделки
+          </Link>
+          <Link
+            to="/dashboards"
+            className={clsx(styles.link, isDashboardsActive && styles.active)}
+          >
+            <Icon name="dashboards" size={16} />
+            Дашборды
           </Link>
         </nav>
 
