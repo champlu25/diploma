@@ -4,6 +4,62 @@
   gap: 16px;
 }
 
+.statusNav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 6px;
+}
+
+.statusLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: rgba(28, 37, 38, 0.85);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.statusLink::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 200ms ease;
+}
+
+.statusLink:hover,
+.statusLink:focus-visible {
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.statusLink:hover::after,
+.statusLink:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.statusActive {
+  color: var(--color-text-primary);
+}
+
+.statusActive::after {
+  transform: scaleX(1);
+}
+
 .alert {
   width: 100%;
 }
@@ -56,6 +112,15 @@
   line-height: 1.3;
   font-weight: 650;
   margin-bottom: 12px;
+}
+
+.bigNumber {
+  font-family: var(--font-family-heading);
+  font-weight: 700;
+  font-size: 1.8rem;
+  color: var(--color-text-primary);
+  letter-spacing: 0.2px;
+  padding: 6px 2px 2px;
 }
 
 @media (min-width: 920px) {

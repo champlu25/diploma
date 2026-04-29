@@ -132,6 +132,23 @@ const insertUser = async (
   return result.rows[0];
 };
 
+const mulberry32 = (seed) => {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const pick = (rng, items) => items[Math.floor(rng() * items.length)];
+
+const randomInt = (rng, min, max) => Math.floor(rng() * (max - min + 1)) + min;
+
+const randomDaysAgoSql = (days) => `NOW() - INTERVAL '${days} days'`;
+
 const seedTestData = async (client) => {
   const rolesResult = await client.query(`SELECT id, name FROM roles`);
   const roleIds = new Map(rolesResult.rows.map((row) => [row.name, row.id]));
@@ -183,62 +200,96 @@ const seedTestData = async (client) => {
     groupLeadUserId: groupLead.id,
   });
 
-  const hotStatusId = await selectLookupIdByName(client, "deal_statuses", "Горячая");
-  const coldStatusId = await selectLookupIdByName(
-    client,
-    "deal_statuses",
-    "Холодная",
+  const dealStatusesResult = await client.query(`SELECT id, name FROM deal_statuses ORDER BY id ASC`);
+  const dealLifecyclesResult = await client.query(`SELECT id, name FROM deal_lifecycle_statuses ORDER BY id ASC`);
+  const leasingCompaniesResult = await client.query(
+    `SELECT id, name FROM leasing_companies WHERE is_active = TRUE ORDER BY id ASC`,
   );
-  const activeLifecycleId = await selectLookupIdByName(
-    client,
-    "deal_lifecycle_statuses",
-    "Активные",
-  );
-  const realizedLifecycleId = await selectLookupIdByName(
-    client,
-    "deal_lifecycle_statuses",
-    "Реализованные",
-  );
-  const vtbLeasingId = await selectLookupIdByName(
-    client,
-    "leasing_companies",
-    "ВТБЛизинг",
-  );
-  const sberLeasingId = await selectLookupIdByName(
-    client,
-    "leasing_companies",
-    "СберЛизинг",
-  );
-  const negotiationStageId = await selectLookupIdByName(
-    client,
-    "deal_stages",
-    "Переговоры",
-  );
-  const saleStageId = await selectLookupIdByName(client, "deal_stages", "Продажа");
+  const dealStagesResult = await client.query(`SELECT id, name FROM deal_stages ORDER BY id ASC`);
 
-  const companies = [
-    {
-      managerUserId: manager1.id,
-      name: 'ООО "Ромашка"',
-      inn: "7701234567",
-      contactName: "Иван Иванов",
-      phone: "+79990000001",
-      email: "contact@romashka.example",
-      comment: "Тестовая компания",
-    },
-    {
-      managerUserId: manager2.id,
-      name: 'ООО "Вектор"',
-      inn: "7812345678",
-      contactName: "Пётр Петров",
-      phone: "+79990000002",
-      email: "info@vector.example",
-      comment: "Вторая тестовая компания",
-    },
+  const statusByName = new Map(dealStatusesResult.rows.map((row) => [row.name, row.id]));
+  const lifecycleByName = new Map(dealLifecyclesResult.rows.map((row) => [row.name, row.id]));
+
+  const hotStatusId = statusByName.get("Горячая");
+  const coldStatusId = statusByName.get("Холодная");
+  const activeLifecycleId = lifecycleByName.get("Активные");
+  const realizedLifecycleId = lifecycleByName.get("Реализованные");
+  const delayedLifecycleId = lifecycleByName.get("Отложенные");
+  const failedLifecycleId = lifecycleByName.get("Несостоявшиеся");
+
+  if (!hotStatusId || !coldStatusId) {
+    throw new Error('Не найдены статусы "Горячая"/"Холодная" в deal_statuses.');
+  }
+  if (!activeLifecycleId || !realizedLifecycleId || !delayedLifecycleId || !failedLifecycleId) {
+    throw new Error('Не найдены статусы жизненного цикла в deal_lifecycle_statuses.');
+  }
+  if (leasingCompaniesResult.rowCount === 0) {
+    throw new Error("Не найдены активные лизинговые компании в leasing_companies.");
+  }
+  if (dealStagesResult.rowCount === 0) {
+    throw new Error("Не найдены этапы сделки в deal_stages.");
+  }
+
+  const leasingCompanyIds = leasingCompaniesResult.rows.map((row) => row.id);
+  const stageIds = dealStagesResult.rows.map((row) => row.id);
+
+  // Seed more data so dashboards have something to plot.
+  // Keep users as-is (4 accounts), but create more companies and deals.
+  const rng = mulberry32(20260430);
+
+  const companies = [];
+  const companyNamePool = [
+    'ООО "Ромашка"',
+    'ООО "Вектор"',
+    'ООО "Сфера"',
+    'ООО "Альфа"',
+    'ООО "Бета"',
+    'ООО "Гамма"',
+    'ООО "Омега"',
+    'ООО "Логистик"',
+    'ООО "ТрансСервис"',
+    'ООО "СтройМаш"',
+    'ООО "Север"',
+    'ООО "Юг"',
+    'ООО "ВолгаТех"',
+    'ООО "Меркурий"',
+    'ООО "Орион"',
+    'ООО "Пульс"',
+    'ООО "Гранит"',
+    'ООО "Феникс"',
   ];
+  const contactFirstNames = ["Иван", "Пётр", "Сергей", "Алексей", "Андрей", "Виктор", "Николай", "Дмитрий"];
+  const contactLastNames = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Васильев", "Попов", "Новиков"];
+
+  const companyCount = 24;
+  for (let i = 0; i < companyCount; i += 1) {
+    const managerUserId = i % 2 === 0 ? manager1.id : manager2.id;
+    const baseName = companyNamePool[i % companyNamePool.length];
+    const suffix = i < companyNamePool.length ? "" : ` ${i + 1}`;
+    const name = `${baseName}${suffix}`;
+
+    // 10-digit INN, unique, matches schema regex.
+    const inn = String(7700000000 + i).padStart(10, "0");
+
+    const firstName = pick(rng, contactFirstNames);
+    const lastName = pick(rng, contactLastNames);
+
+    companies.push({
+      managerUserId,
+      name,
+      inn,
+      contactName: `${firstName} ${lastName}`,
+      phone: `+7999000${String(1000 + i).slice(-4)}`,
+      email: `c${inn}@example.test`,
+      comment: i % 3 === 0 ? "Тестовые данные" : null,
+    });
+  }
 
   const createdCompanies = [];
   for (const company of companies) {
+    const nextContactAtDays = randomInt(rng, 0, 21);
+    const nextContactAtSql = rng() < 0.7 ? randomDaysAgoSql(-nextContactAtDays) : null;
+
     const result = await client.query(
       `
         INSERT INTO companies (
@@ -248,9 +299,12 @@ const seedTestData = async (client) => {
           contact_name,
           phone,
           email,
-          comment
+          comment,
+          next_contact_at,
+          created_at,
+          updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, ${nextContactAtSql ? nextContactAtSql : "NULL"}, NOW(), NOW())
         RETURNING id, name, inn, manager_user_id
       `,
       [
@@ -266,47 +320,94 @@ const seedTestData = async (client) => {
     createdCompanies.push(result.rows[0]);
   }
 
-  const [companyA, companyB] = createdCompanies;
+  const needsPool = [
+    "Лизинг на легковой автомобиль",
+    "Лизинг на грузовой автомобиль",
+    "Лизинг на спецтехнику",
+    "Обновление автопарка",
+    "Лизинг на коммерческий транспорт",
+  ];
+  const commentPool = [
+    "Первичный контакт",
+    "Ждём КП",
+    "Согласование условий",
+    "Запрос документов",
+    "Сделка в работе",
+    "Пауза по инициативе клиента",
+  ];
 
-  await client.query(
-    `
-      INSERT INTO deals (
-        company_id,
-        need,
-        deal_status_id,
-        deal_lifecycle_status_id,
-        completed_at,
-        pl_cost_rub,
-        leasing_company_id,
-        agent_fee_percent,
-        deal_stage_id,
-        comment
-      )
-      VALUES
-        ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9),
-        ($10, $11, $12, $13, NOW(), $14, $15, $16, $17, $18)
-    `,
-    [
-      companyA.id,
-      "Нужен лизинг на легковой автомобиль",
-      hotStatusId,
-      activeLifecycleId,
-      2_500_000,
-      vtbLeasingId,
-      20,
-      negotiationStageId,
-      "Первая тестовая сделка",
-      companyB.id,
-      "Лизинг на грузовой автомобиль",
-      coldStatusId,
-      realizedLifecycleId,
-      6_800_000,
-      sberLeasingId,
-      10,
-      saleStageId,
-      "Вторая тестовая сделка (реализована)",
-    ],
-  );
+  // More deals for charts: a good spread across lifecycle/status/stages/leasing.
+  const dealCount = 140;
+  for (let i = 0; i < dealCount; i += 1) {
+    const company = pick(rng, createdCompanies);
+
+    const lifecycleRoll = rng();
+    const lifecycleId =
+      lifecycleRoll < 0.5
+        ? activeLifecycleId
+        : lifecycleRoll < 0.7
+          ? realizedLifecycleId
+          : lifecycleRoll < 0.85
+            ? delayedLifecycleId
+            : failedLifecycleId;
+
+    const dealStatusId = rng() < 0.6 ? hotStatusId : coldStatusId;
+    const leasingCompanyId = pick(rng, leasingCompanyIds);
+    const stageId = pick(rng, stageIds);
+
+    const plCostRub = randomInt(rng, 500_000, 15_000_000);
+    const agentFeePercent = randomInt(rng, 5, 25);
+
+    const createdDaysAgo = randomInt(rng, 0, 180);
+    const updatedDaysAgo = Math.max(0, createdDaysAgo - randomInt(rng, 0, 14));
+
+    const completedAtSql =
+      lifecycleId === activeLifecycleId ? "NULL" : randomDaysAgoSql(randomInt(rng, 0, 120));
+
+    await client.query(
+      `
+        INSERT INTO deals (
+          company_id,
+          need,
+          deal_status_id,
+          deal_lifecycle_status_id,
+          completed_at,
+          pl_cost_rub,
+          leasing_company_id,
+          agent_fee_percent,
+          deal_stage_id,
+          comment,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          ${completedAtSql},
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          ${randomDaysAgoSql(createdDaysAgo)},
+          ${randomDaysAgoSql(updatedDaysAgo)}
+        )
+      `,
+      [
+        company.id,
+        pick(rng, needsPool),
+        dealStatusId,
+        lifecycleId,
+        plCostRub,
+        leasingCompanyId,
+        agentFeePercent,
+        stageId,
+        rng() < 0.75 ? pick(rng, commentPool) : null,
+      ],
+    );
+  }
 
   return { credentials, users: { owner, groupLead, manager1, manager2 } };
 };
