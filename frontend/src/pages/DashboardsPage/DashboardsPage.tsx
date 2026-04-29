@@ -8,7 +8,6 @@ import { Card } from "../../components/ui/Card/Card";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import { PieChart } from "../../components/charts/PieChart/PieChart";
-import { TwoSegmentBarChart } from "../../components/charts/TwoSegmentBarChart/TwoSegmentBarChart";
 import styles from "./DashboardsPage.module.scss";
 
 interface DashboardsPageProps {
@@ -33,6 +32,8 @@ const toFiniteNumberOrZero = (value: unknown): number => {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const formatNumberLike = (value: number): string => value.toLocaleString("ru-RU");
 
 export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -84,8 +85,6 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     return deals.filter((deal) => deal.dealLifecycleStatusId === selectedLifecycleStatusId);
   }, [deals, selectedLifecycleStatusId]);
 
-  const hasFilteredDeals = filteredDeals.length > 0;
-
   const leasingSegments = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -120,24 +119,38 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       .sort((a, b) => b.value - a.value);
   }, [filteredDeals]);
 
-  const hotColdItems = useMemo(() => {
+  const managerCountSegments = useMemo(() => {
     const counts = new Map<string, number>();
 
     for (const deal of filteredDeals) {
-      counts.set(deal.dealStatusName, (counts.get(deal.dealStatusName) ?? 0) + 1);
+      const key = deal.managerName;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
 
-    const byCount = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-    const hotKey = Array.from(counts.keys()).find((key) => includesAny(key, ["горяч"])) ?? byCount[0]?.[0] ?? "Горячие";
-    const coldKey =
-      Array.from(counts.keys()).find((key) => includesAny(key, ["холод"])) ??
-      byCount.find(([label]) => label !== hotKey)?.[0] ??
-      "Холодные";
+    return Array.from(counts.entries())
+      .map(([label, value], index) => ({
+        label,
+        value,
+        color: COLORS[index % COLORS.length]!,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredDeals]);
 
-    return [
-      { label: hotKey, value: counts.get(hotKey) ?? 0, color: "#dc2626" },
-      { label: coldKey, value: counts.get(coldKey) ?? 0, color: "#2563eb" },
-    ] as const;
+  const managerIncomeSegments = useMemo(() => {
+    const sums = new Map<string, number>();
+
+    for (const deal of filteredDeals) {
+      const key = deal.managerName;
+      sums.set(key, (sums.get(key) ?? 0) + toFiniteNumberOrZero(deal.advanceTotalRub));
+    }
+
+    return Array.from(sums.entries())
+      .map(([label, value], index) => ({
+        label,
+        value,
+        color: COLORS[index % COLORS.length]!,
+      }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredDeals]);
 
   const totalIncomeRub = useMemo(() => {
@@ -146,6 +159,24 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
 
   const isActiveFilter = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["актив"]);
   const isRealizedFilter = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["реализ"]);
+
+  const managerIncomeTitle = isActiveFilter
+    ? "Прогноз (АВ, руб.) по менеджерам"
+    : isRealizedFilter
+      ? "Факт (АВ, руб.) по менеджерам"
+      : "Потенциал (АВ, руб.) по менеджерам";
+
+  const incomeTitle = isActiveFilter
+    ? "Потенциальный доход (АВ, руб.), ₽"
+    : isRealizedFilter
+      ? "Заработали (АВ, руб.), ₽"
+      : "Потенциальный доход (АВ, руб.), ₽";
+
+  const managerCountMax = useMemo(() => Math.max(0, ...managerCountSegments.map((s) => s.value)), [managerCountSegments]);
+  const managerIncomeMax = useMemo(
+    () => Math.max(0, ...managerIncomeSegments.map((s) => s.value)),
+    [managerIncomeSegments],
+  );
 
   return (
     <div className={styles.page}>
@@ -174,78 +205,140 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       )}
 
       <div className={styles.grid}>
-        <Card
-          title="Показатели"
-          subtitle={selectedLifecycleStatusName ? `Срез: ${selectedLifecycleStatusName}` : "Срез по сделкам"}
-          className={`${styles.card} ${styles.fullRow}`}
-        >
-          {isLoading ? (
-            <div className={styles.loading}>
-              <Spinner size={24} />
-              <div className={styles.loadingText}>Загрузка...</div>
-            </div>
-          ) : (
-            <div className={styles.metricsRow} aria-label="Ключевые показатели">
-              {isActiveFilter && (
-                <div className={styles.metricBlock}>
-                  <div className={styles.metricTitle}>Горячие / холодные</div>
-                  <TwoSegmentBarChart
-                    ariaLabel="Сравнение горячих и холодных сделок"
-                    items={hotColdItems}
-                    emptyText="Сделок пока нет"
-                    emptyWhenTotalZero={!hasFilteredDeals}
-                  />
+        <div className={styles.rowFull}>
+          <div className={styles.rowGrid} aria-label="Ключевые показатели и менеджеры">
+            <Card
+              title={incomeTitle}
+              subtitle={selectedLifecycleStatusName ? `Срез: ${selectedLifecycleStatusName}` : undefined}
+              className={`${styles.card} ${styles.fixedCard}`}
+            >
+              {isLoading ? (
+                <div className={styles.loading}>
+                  <Spinner size={24} />
+                  <div className={styles.loadingText}>Загрузка...</div>
                 </div>
-              )}
-
-              <div className={styles.metricBlock}>
-                <div className={styles.metricTitle}>
-                  {isActiveFilter
-                    ? "Прогнозируемый доход (АВ, руб.), ₽"
-                    : isRealizedFilter
-                      ? "Заработали (АВ, руб.), ₽"
-                      : "Потенциальный доход (АВ, руб.), ₽"}
-                </div>
-
-                <div className={styles.bigNumber} aria-label="Доход">
+              ) : (
+                <div className={styles.incomeNumber} aria-label="Доход">
                   {Math.round(totalIncomeRub).toLocaleString("ru-RU")}
                 </div>
-              </div>
-            </div>
-          )}
-        </Card>
+              )}
+            </Card>
 
-        <Card title="Лизинговые" subtitle="По лизинговым компаниям" className={styles.card}>
-          {isLoading ? (
-            <div className={styles.loading}>
-              <Spinner size={24} />
-              <div className={styles.loadingText}>Загрузка...</div>
-            </div>
-          ) : (
-            <PieChart
-              ariaLabel="Круговая диаграмма по лизинговым компаниям"
-              segments={leasingSegments}
-              emptyText="Сделок пока нет"
-            />
-          )}
-        </Card>
+            <Card title="Менеджеры" subtitle="Распределение сделок" className={`${styles.card} ${styles.barCard}`}>
+              {isLoading ? (
+                <div className={styles.loading}>
+                  <Spinner size={24} />
+                  <div className={styles.loadingText}>Загрузка...</div>
+                </div>
+              ) : (
+                <div className={styles.barList} aria-label="Сделки по менеджерам">
+                  {managerCountSegments.length === 0 ? (
+                    <div className={styles.emptyInline}>Сделок пока нет</div>
+                  ) : (
+                    managerCountSegments.map((item) => (
+                      <div key={item.label} className={styles.barRow}>
+                        <div className={styles.barMeta}>
+                          <span className={styles.barLabel} title={item.label}>
+                            {item.label}
+                          </span>
+                          <span className={styles.barValue}>{formatNumberLike(item.value)}</span>
+                        </div>
+                        <div className={styles.barTrack} aria-hidden="true">
+                          <div
+                            className={styles.barFill}
+                            style={{
+                              ["--color" as never]: item.color,
+                              ["--size" as never]: `${
+                                managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </Card>
 
-        {!isRealizedFilter && (
-          <Card title="Этапы сделки" subtitle="Распределение по этапам" className={styles.card}>
-            {isLoading ? (
-              <div className={styles.loading}>
-                <Spinner size={24} />
-                <div className={styles.loadingText}>Загрузка...</div>
-              </div>
-            ) : (
-              <PieChart
-                ariaLabel="Круговая диаграмма по этапам сделки"
-                segments={stageSegments}
-                emptyText="Сделок пока нет"
-              />
+            <Card title="Менеджеры" subtitle={managerIncomeTitle} className={`${styles.card} ${styles.barCard}`}>
+              {isLoading ? (
+                <div className={styles.loading}>
+                  <Spinner size={24} />
+                  <div className={styles.loadingText}>Загрузка...</div>
+                </div>
+              ) : (
+                <div className={styles.barList} aria-label="Доход по менеджерам">
+                  {managerIncomeSegments.length === 0 ? (
+                    <div className={styles.emptyInline}>Сделок пока нет</div>
+                  ) : (
+                    managerIncomeSegments.map((item) => (
+                      <div key={item.label} className={styles.barRow}>
+                        <div className={styles.barMeta}>
+                          <span className={styles.barLabel} title={item.label}>
+                            {item.label}
+                          </span>
+                          <span className={styles.barValue}>{formatNumberLike(Math.round(item.value))}</span>
+                        </div>
+                        <div className={styles.barTrack} aria-hidden="true">
+                          <div
+                            className={styles.barFill}
+                            style={{
+                              ["--color" as never]: item.color,
+                              ["--size" as never]: `${
+                                managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+
+        <div className={styles.rowFull}>
+          <div className={styles.rowGridPies} aria-label="Круговые диаграммы">
+            {!isRealizedFilter && (
+              <Card
+                title="Этапы сделки"
+                subtitle="Распределение по этапам"
+                className={`${styles.card} ${styles.pieCard} ${styles.stagePieCard}`}
+              >
+                {isLoading ? (
+                  <div className={styles.loading}>
+                    <Spinner size={24} />
+                    <div className={styles.loadingText}>Загрузка...</div>
+                  </div>
+                ) : (
+                  <PieChart
+                    ariaLabel="Круговая диаграмма по этапам сделки"
+                    segments={stageSegments}
+                    emptyText="Сделок пока нет"
+                  />
+                )}
+              </Card>
             )}
-          </Card>
-        )}
+
+            <Card title="Лизинговые" subtitle="По лизинговым компаниям" className={`${styles.card} ${styles.pieCard}`}>
+              {isLoading ? (
+                <div className={styles.loading}>
+                  <Spinner size={24} />
+                  <div className={styles.loadingText}>Загрузка...</div>
+                </div>
+              ) : (
+                <PieChart
+                  ariaLabel="Круговая диаграмма по лизинговым компаниям"
+                  segments={leasingSegments}
+                  emptyText="Сделок пока нет"
+                />
+              )}
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

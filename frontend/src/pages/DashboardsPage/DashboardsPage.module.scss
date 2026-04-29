@@ -73,11 +73,38 @@
 }
 
 .card {
-  width: 100%;
+  width: calc(100% - 16px);
+  margin: 0 auto;
+}
+
+.fixedCard {
+  max-width: 720px;
 }
 
 .fullRow {
   grid-column: 1 / -1;
+}
+
+.rowFull {
+  grid-column: 1 / -1;
+}
+
+.rowGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.rowGridPies {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  justify-items: stretch;
+  align-items: start;
+}
+
+.narrowCard {
+  width: 100%;
 }
 
 .loading {
@@ -114,13 +141,89 @@
   margin-bottom: 12px;
 }
 
-.bigNumber {
+.barList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.barRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.barMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.barLabel {
+  font-weight: 650;
+  color: rgba(15, 23, 42, 0.88);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.barValue {
+  flex: 0 0 auto;
+  color: rgba(15, 23, 42, 0.7);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.barTrack {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+
+.barFill {
+  width: var(--size);
+  height: 100%;
+  background: var(--color);
+  border-radius: 999px;
+}
+
+.emptyInline {
+  padding: 14px 4px;
+  color: rgba(15, 23, 42, 0.7);
+  font-size: 14px;
+}
+
+.pieCard {
+  max-width: 720px;
+}
+
+.stagePieCard {
+  max-width: 720px;
+}
+
+.barCard {
+  align-self: stretch;
+}
+
+.incomeNumber {
   font-family: var(--font-family-heading);
   font-weight: 700;
-  font-size: 1.8rem;
+  font-size: 2rem;
   color: var(--color-text-primary);
   letter-spacing: 0.2px;
-  padding: 6px 2px 2px;
+  padding: 10px 6px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  border-radius: 14px;
+  background: rgba(241, 245, 249, 0.35);
 }
 
 @media (min-width: 920px) {
@@ -133,10 +236,28 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px;
   }
+
+  .rowGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .rowGridPies {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
 }
 
 @media (min-width: 1100px) {
   .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rowGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rowGridPies {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
