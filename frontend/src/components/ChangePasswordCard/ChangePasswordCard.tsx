@@ -12,28 +12,26 @@ import styles from "./ChangePasswordCard.module.scss";
 
 interface ChangePasswordCardProps {
   currentUser: AuthUser;
-  onPasswordChanged?: () => void;
+  onPasswordChanged?: () => void | Promise<void>;
 }
 
-export function ChangePasswordCard({
-  currentUser,
-  onPasswordChanged,
-}: ChangePasswordCardProps) {
+export function ChangePasswordCard({ currentUser, onPasswordChanged }: ChangePasswordCardProps) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  const subtitle = currentUser.mustChangePassword
+  const mustChange = Boolean(currentUser.mustChangePassword);
+
+  const subtitle = mustChange
     ? "Это временный пароль. Пожалуйста, задайте новый."
     : "Для смены пароля введите старый и новый.";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!oldPassword || !newPassword || !confirmPassword) {
+    if ((!mustChange && !oldPassword) || !newPassword || !confirmPassword) {
       setError("Заполните все поля.");
       return;
     }
@@ -46,14 +44,12 @@ export function ChangePasswordCard({
     try {
       setIsSubmitting(true);
       setError(null);
-      setSuccess(null);
 
-      await changePassword(oldPassword, newPassword);
-      setSuccess("Пароль изменён.");
+      await changePassword(mustChange ? "" : oldPassword, newPassword);
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      onPasswordChanged?.();
+      await onPasswordChanged?.();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось изменить пароль."));
     } finally {
@@ -66,15 +62,17 @@ export function ChangePasswordCard({
       <Divider />
 
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
-        <InputField
-          label="Старый пароль"
-          type="password"
-          value={oldPassword}
-          onChange={(event) => setOldPassword(event.target.value)}
-          disabled={isSubmitting}
-          autoComplete="current-password"
-          required
-        />
+        {!mustChange && (
+          <InputField
+            label="Старый пароль"
+            type="password"
+            value={oldPassword}
+            onChange={(event) => setOldPassword(event.target.value)}
+            disabled={isSubmitting}
+            autoComplete="current-password"
+            required
+          />
+        )}
 
         <InputField
           label="Новый пароль"
@@ -97,7 +95,6 @@ export function ChangePasswordCard({
         />
 
         {error && <Alert tone="error">{error}</Alert>}
-        {success && <Alert tone="success">{success}</Alert>}
 
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? <Spinner size={22} /> : "Сохранить"}
@@ -106,4 +103,3 @@ export function ChangePasswordCard({
     </Card>
   );
 }
-

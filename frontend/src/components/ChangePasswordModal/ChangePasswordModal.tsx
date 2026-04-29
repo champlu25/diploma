@@ -14,7 +14,7 @@ interface ChangePasswordModalProps {
   currentUser: AuthUser;
   open: boolean;
   onClose: () => void;
-  onPasswordChanged?: () => void;
+  onPasswordChanged?: () => void | Promise<void>;
 }
 
 export function ChangePasswordModal({
@@ -23,33 +23,35 @@ export function ChangePasswordModal({
   onClose,
   onPasswordChanged,
 }: ChangePasswordModalProps) {
+  const [forcedMode, setForcedMode] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const mustChange = Boolean(currentUser.mustChangePassword);
 
   useEffect(() => {
+    if (open) {
+      setForcedMode(Boolean(currentUser.mustChangePassword));
+      return;
+    }
+
     if (!open) {
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setError(null);
-      setSuccess(null);
     }
-  }, [open]);
+  }, [open, currentUser.mustChangePassword]);
 
-  const subtitle = mustChange
+  const subtitle = forcedMode
     ? "Это временный пароль. Пожалуйста, задайте новый."
     : "Для смены пароля введите старый и новый.";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!oldPassword || !newPassword || !confirmPassword) {
+    if ((!forcedMode && !oldPassword) || !newPassword || !confirmPassword) {
       setError("Заполните все поля.");
       return;
     }
@@ -62,18 +64,14 @@ export function ChangePasswordModal({
     try {
       setIsSubmitting(true);
       setError(null);
-      setSuccess(null);
 
-      await changePassword(oldPassword, newPassword);
-      setSuccess("Пароль изменён.");
-      onPasswordChanged?.();
+      await changePassword(forcedMode ? "" : oldPassword, newPassword);
+      await onPasswordChanged?.();
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
 
-      if (!mustChange) {
-        onClose();
-      }
+      onClose();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось изменить пароль."));
     } finally {
@@ -82,14 +80,7 @@ export function ChangePasswordModal({
   };
 
   return (
-    <Modal
-      open={open}
-      title="Смена пароля"
-      onClose={() => {
-        if (mustChange) return;
-        onClose();
-      }}
-    >
+    <Modal open={open} title="Смена пароля" closeable={!forcedMode} onClose={onClose}>
       <div style={{ color: "var(--color-text-secondary)", fontWeight: 500 }}>
         {subtitle}
       </div>
@@ -97,15 +88,17 @@ export function ChangePasswordModal({
       <Divider />
 
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
-        <InputField
-          label="Старый пароль"
-          type="password"
-          value={oldPassword}
-          onChange={(event) => setOldPassword(event.target.value)}
-          disabled={isSubmitting}
-          autoComplete="current-password"
-          required
-        />
+        {!forcedMode && (
+          <InputField
+            label="Старый пароль"
+            type="password"
+            value={oldPassword}
+            onChange={(event) => setOldPassword(event.target.value)}
+            disabled={isSubmitting}
+            autoComplete="current-password"
+            required
+          />
+        )}
 
         <InputField
           label="Новый пароль"
@@ -128,16 +121,10 @@ export function ChangePasswordModal({
         />
 
         {error && <Alert tone="error">{error}</Alert>}
-        {success && <Alert tone="success">{success}</Alert>}
 
         <div className={styles.actions}>
-          {!mustChange && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+          {!forcedMode && (
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
               Отмена
             </Button>
           )}
@@ -149,4 +136,3 @@ export function ChangePasswordModal({
     </Modal>
   );
 }
-

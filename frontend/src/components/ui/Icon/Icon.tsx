@@ -15,6 +15,9 @@ import houseFillSvg from "../../../assets/icons/house-fill.svg?raw";
 import briefcaseFillSvg from "../../../assets/icons/briefcase-fill.svg?raw";
 import lockSvg from "../../../assets/icons/lock.svg?raw";
 import pieChartFillSvg from "../../../assets/icons/pie-chart-fill.svg?raw";
+import gearSvg from "../../../assets/icons/gear.svg?raw";
+import infoSvg from "../../../assets/icons/info.svg?raw";
+import arrowRightSvg from "../../../assets/icons/arrow-right.svg?raw";
 
 const ICONS = {
   plus: plusSvg,
@@ -31,6 +34,9 @@ const ICONS = {
   home: houseFillSvg,
   lock: lockSvg,
   dashboards: pieChartFillSvg,
+  settings: gearSvg,
+  details: infoSvg,
+  arrowRight: arrowRightSvg,
 } as const;
 
 export type IconName = keyof typeof ICONS;

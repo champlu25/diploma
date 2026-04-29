@@ -3,9 +3,11 @@ import {
   deleteDeal,
   getDealLookups,
   getDeals,
+  getDealsByCompanyId,
   updateDeal,
   updateDealLifecycleStatus,
 } from "../../api/dealsApi";
+import { getGroupLeadManagers, getUsers } from "../../api/usersApi";
 import type { Deal, DealFormValues, DealLookups } from "../../types/deal";
 import type { AuthUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
@@ -15,9 +17,10 @@ import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
 import { IconButton } from "../../components/ui/IconButton/IconButton";
 import { Icon } from "../../components/ui/Icon/Icon";
-import { InputField, TextAreaField } from "../../components/ui/Field/Field";
+import { InputField, SelectField, TextAreaField } from "../../components/ui/Field/Field";
 import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import styles from "./DealsPage.module.scss";
 
 interface DealsPageProps {
@@ -106,6 +109,24 @@ const formatNumberLike = (value: unknown): string => {
 };
 
 export function DealsPage({ currentUser }: DealsPageProps) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const locationCompanyName =
+    typeof (location.state as { companyName?: unknown } | null)?.companyName === "string"
+      ? ((location.state as { companyName: string }).companyName ?? "").trim()
+      : "";
+
+  const fixedCompany = useMemo(() => {
+    const companyIdParam = searchParams.get("companyId");
+    const normalizedCompanyId = companyIdParam?.trim() ?? "";
+    const hasCompanyId = /^\d+$/.test(normalizedCompanyId) && Number(normalizedCompanyId) > 0;
+
+    return {
+      companyId: hasCompanyId ? normalizedCompanyId : null,
+    };
+  }, [searchParams]);
+
   const [deals, setDeals] = useState<Deal[]>([]);
   const [lookups, setLookups] = useState<DealLookups | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -116,6 +137,10 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
   const [searchCompanyName, setSearchCompanyName] = useState("");
   const [searchInn, setSearchInn] = useState("");
+  const [managerFilterUserId, setManagerFilterUserId] = useState("");
+  const [managerFilterOptions, setManagerFilterOptions] = useState<
+    { value: string; label: string }[]
+  >([{ value: "", label: "Все менеджеры" }]);
 
   const [editingDealId, setEditingDealId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<DealFormValues>(emptyForm);
@@ -148,38 +173,130 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     [currentUser],
   );
 
+  const showManagerFilter = currentUser.role === "owner" || currentUser.role === "group_lead";
+
+  useEffect(() => {
+    if (!showManagerFilter) return;
+
+    let isCancelled = false;
+
+    const getUserLabel = (user: {
+      username: string;
+      lastName: string | null;
+      firstName: string | null;
+      middleName?: string | null;
+    }) => {
+      const fullName = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ");
+      return fullName ? `${user.username} — ${fullName}` : user.username;
+    };
+
+    const loadManagers = async () => {
+      try {
+        if (currentUser.role === "owner") {
+          const users = await getUsers();
+          const options = users
+            .filter((user) => user.role === "manager" || user.role === "group_lead")
+            .map((user) => ({ value: String(user.id), label: getUserLabel(user) }))
+            .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+          if (!isCancelled) {
+            setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
+          }
+          return;
+        }
+
+        const managers = await getGroupLeadManagers();
+        const options = managers
+          .map((manager) => ({ value: String(manager.id), label: getUserLabel(manager) }))
+          .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+        if (!isCancelled) {
+          setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
+        }
+      } catch {
+        if (!isCancelled) {
+          setManagerFilterOptions([{ value: "", label: "Все менеджеры" }]);
+        }
+      }
+    };
+
+    void loadManagers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser.role, showManagerFilter]);
+
+  useEffect(() => {
+    if (!showManagerFilter) return;
+    if (!managerFilterUserId) return;
+    const exists = managerFilterOptions.some((option) => option.value === managerFilterUserId);
+    if (!exists) {
+      setManagerFilterUserId("");
+    }
+  }, [managerFilterOptions, managerFilterUserId, showManagerFilter]);
+
   const filteredDeals = useMemo(() => {
     const queryName = searchCompanyName.trim().toLowerCase();
     const queryInn = searchInn.trim();
+    const hasFixedCompanyId = fixedCompany.companyId !== null;
 
     return deals.filter((deal) => {
+      if (hasFixedCompanyId && String(deal.companyId) !== fixedCompany.companyId) {
+        return false;
+      }
       if (selectedLifecycleStatusId && deal.dealLifecycleStatusId !== selectedLifecycleStatusId) {
         return false;
       }
-      if (queryName && !deal.companyName.toLowerCase().includes(queryName)) {
+      if (managerFilterUserId && String(deal.companyManagerUserId) !== managerFilterUserId) {
         return false;
       }
-      if (queryInn && !deal.companyInn.includes(queryInn)) {
-        return false;
+      if (!hasFixedCompanyId) {
+        if (queryName && !deal.companyName.toLowerCase().includes(queryName)) {
+          return false;
+        }
+        if (queryInn && !deal.companyInn.includes(queryInn)) {
+          return false;
+        }
       }
       return true;
     });
-  }, [deals, searchCompanyName, searchInn, selectedLifecycleStatusId]);
+  }, [
+    deals,
+    fixedCompany.companyId,
+    managerFilterUserId,
+    searchCompanyName,
+    searchInn,
+    selectedLifecycleStatusId,
+  ]);
+
+  const fixedCompanyTitle = useMemo(() => {
+    if (!fixedCompany.companyId) return null;
+    if (locationCompanyName) return locationCompanyName;
+    return deals.find((deal) => String(deal.companyId) === fixedCompany.companyId)?.companyName ?? null;
+  }, [deals, fixedCompany.companyId, locationCompanyName]);
 
   const selectedLifecycleStatusName = useMemo(() => {
     if (!lookups || !selectedLifecycleStatusId) return null;
     return lookups.dealLifecycleStatuses.find((item) => item.id === selectedLifecycleStatusId)?.name ?? null;
   }, [lookups, selectedLifecycleStatusId]);
 
-  const showCompletionColumn = selectedLifecycleStatusName !== null && selectedLifecycleStatusName !== "Активные";
-  const tableColSpan = showCompletionColumn ? 12 : 11;
+  const activeLifecycleLabel = "Активные";
+  const showActiveColumns =
+    selectedLifecycleStatusName === null || selectedLifecycleStatusName === activeLifecycleLabel;
+  const showCompletionColumn =
+    selectedLifecycleStatusName !== null && selectedLifecycleStatusName !== activeLifecycleLabel;
+  const tableColSpan = (showActiveColumns ? 11 : 9) + (showCompletionColumn ? 1 : 0);
 
   const loadDeals = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const [nextDeals, nextLookups] = await Promise.all([getDeals(), getDealLookups()]);
+      const [nextDeals, nextLookups] = await Promise.all([
+        fixedCompany.companyId ? getDealsByCompanyId(Number(fixedCompany.companyId)) : getDeals(),
+        getDealLookups(),
+      ]);
       setDeals(nextDeals);
       setLookups(nextLookups);
     } catch (requestError) {
@@ -187,14 +304,43 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fixedCompany.companyId]);
 
   useEffect(() => {
     void loadDeals();
   }, [loadDeals]);
 
   useEffect(() => {
+    if (fixedCompany.companyId) {
+      setSelectedLifecycleStatusId(null);
+    }
+  }, [fixedCompany.companyId]);
+
+  useEffect(() => {
     if (!lookups) return;
+
+    const active = lookups.dealLifecycleStatuses.find((item) => item.name === "Активные");
+    const fallbackId = active?.id ?? lookups.dealLifecycleStatuses[0]?.id ?? null;
+
+    if (fixedCompany.companyId) {
+      if (selectedLifecycleStatusId) {
+        return;
+      }
+
+      const companyDeals = deals.filter((deal) => String(deal.companyId) === fixedCompany.companyId);
+      const companyStatusIds = new Set(companyDeals.map((deal) => deal.dealLifecycleStatusId));
+      const activeId = active?.id ?? null;
+      const desiredId =
+        (activeId && companyStatusIds.has(activeId) ? activeId : null) ??
+        companyDeals[0]?.dealLifecycleStatusId ??
+        fallbackId;
+
+      if (desiredId) {
+        setSelectedLifecycleStatusId(desiredId);
+      }
+
+      return;
+    }
 
     if (selectedLifecycleStatusId) {
       const exists = lookups.dealLifecycleStatuses.some((item) => item.id === selectedLifecycleStatusId);
@@ -203,9 +349,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       }
     }
 
-    const active = lookups.dealLifecycleStatuses.find((item) => item.name === "Активные");
-    setSelectedLifecycleStatusId(active?.id ?? lookups.dealLifecycleStatuses[0]?.id ?? null);
-  }, [lookups, selectedLifecycleStatusId]);
+    setSelectedLifecycleStatusId(fallbackId);
+  }, [deals, fixedCompany.companyId, lookups, selectedLifecycleStatusId]);
 
   const openInlineEdit = (deal: Deal) => {
     setError(null);
@@ -351,7 +496,10 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
   return (
     <div className={styles.page}>
-      <PageHeader title="Сделки" subtitle="Воронка, расчёты и сопровождение." />
+      <PageHeader
+        title={fixedCompanyTitle ? `Сделки — ${fixedCompanyTitle}` : "Сделки"}
+        subtitle="Воронка, расчёты и сопровождение."
+      />
 
       {error && <Alert tone="error">{error}</Alert>}
 
@@ -362,6 +510,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             value={searchCompanyName}
             onChange={(event) => setSearchCompanyName(event.target.value)}
             placeholder="Например: ООО Ромашка"
+            disabled={Boolean(fixedCompany.companyId)}
           />
         </div>
         <div className={styles.filtersGrow}>
@@ -371,25 +520,44 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             onChange={(event) => setSearchInn(event.target.value)}
             placeholder="10 или 12 цифр"
             inputMode="numeric"
+            disabled={Boolean(fixedCompany.companyId)}
           />
         </div>
+        {showManagerFilter && (
+          <div className={styles.filtersGrow}>
+            <SelectField
+              label="Менеджер"
+              value={managerFilterUserId}
+              onChange={(event) => setManagerFilterUserId(event.target.value)}
+              options={managerFilterOptions}
+            />
+          </div>
+        )}
         <div className={styles.filtersActions} />
       </div>
 
       {lookups && selectedLifecycleStatusId && (
-        <nav className={styles.statusNav} aria-label="Статусы сделок">
-          {lookups.dealLifecycleStatuses.map((status) => (
-            <button
-              key={status.id}
-              type="button"
-              className={`${styles.statusLink} ${status.id === selectedLifecycleStatusId ? styles.statusActive : ""}`}
-              onClick={() => setSelectedLifecycleStatusId(status.id)}
-              disabled={isLoading}
-            >
-              {status.name}
-            </button>
-          ))}
-        </nav>
+        <div className={styles.statusBar}>
+          <nav className={styles.statusNav} aria-label="Статусы сделок">
+            {lookups.dealLifecycleStatuses.map((status) => (
+              <button
+                key={status.id}
+                type="button"
+                className={`${styles.statusLink} ${status.id === selectedLifecycleStatusId ? styles.statusActive : ""}`}
+                onClick={() => setSelectedLifecycleStatusId(status.id)}
+                disabled={isLoading}
+              >
+                {status.name}
+              </button>
+            ))}
+          </nav>
+
+          {fixedCompany.companyId && (
+            <Button type="button" variant="primary" onClick={() => navigate("/deals")}>
+              Все сделки
+            </Button>
+          )}
+        </div>
       )}
 
       <DataTable>
@@ -397,12 +565,12 @@ export function DealsPage({ currentUser }: DealsPageProps) {
           <Tr>
 	            <Th style={{ width: "16%" }}>Компания</Th>
 	            <Th style={{ width: "9%" }}>ИНН</Th>
-	            <Th style={{ width: "10%" }}>Статус</Th>
+	            {showActiveColumns && <Th style={{ width: "10%" }}>Статус</Th>}
             <Th style={{ width: "11%" }}>Стоимость ПЛ</Th>
             <Th style={{ width: "11%" }}>Лизинговая</Th>
             <Th style={{ width: "7%" }}>АВ, %</Th>
             <Th style={{ width: "11%" }}>АВ, руб.</Th>
-            <Th style={{ width: "14%" }}>Этап сделки</Th>
+            {showActiveColumns && <Th style={{ width: "14%" }}>Этап сделки</Th>}
             <Th style={{ width: "13%" }}>Менеджер</Th>
             <Th style={{ width: "12%" }}>Создание</Th>
             {showCompletionColumn && <Th style={{ width: "12%" }}>Завершение</Th>}
@@ -420,29 +588,33 @@ export function DealsPage({ currentUser }: DealsPageProps) {
               <Tr key={deal.id}>
                   <Td>{deal.companyName}</Td>
                   <Td>{deal.companyInn}</Td>
-                  <Td>
-                    {isEditing ? (
-                      <select
-                        className={`${styles.cellSelect} ${editErrors.dealStatusId ? styles.cellError : ""}`}
-                        value={editForm.dealStatusId}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, dealStatusId: event.target.value }))}
-                        disabled={isEditSubmitting || !lookups}
-                        aria-invalid={Boolean(editErrors.dealStatusId) || undefined}
-                        title={editErrors.dealStatusId}
-                      >
-                        <option value="" disabled>
-                          Выберите
-                        </option>
-                        {(lookups?.dealStatuses ?? []).map((item) => (
-                          <option key={item.id} value={String(item.id)}>
-                            {item.name}
+                  {showActiveColumns && (
+                    <Td>
+                      {isEditing ? (
+                        <select
+                          className={`${styles.cellSelect} ${editErrors.dealStatusId ? styles.cellError : ""}`}
+                          value={editForm.dealStatusId}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({ ...prev, dealStatusId: event.target.value }))
+                          }
+                          disabled={isEditSubmitting || !lookups}
+                          aria-invalid={Boolean(editErrors.dealStatusId) || undefined}
+                          title={editErrors.dealStatusId}
+                        >
+                          <option value="" disabled>
+                            Выберите
                           </option>
-                        ))}
-                      </select>
-                    ) : (
-                      deal.dealStatusName
-                    )}
-                  </Td>
+                          {(lookups?.dealStatuses ?? []).map((item) => (
+                            <option key={item.id} value={String(item.id)}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        deal.dealStatusName
+                      )}
+                    </Td>
+                  )}
                   <Td>
                     {isEditing ? (
                       <input
@@ -506,29 +678,33 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                         )
                       : formatNumberLike(deal.advanceTotalRub)}
                   </Td>
-                  <Td>
-                    {isEditing ? (
-                      <select
-                        className={`${styles.cellSelect} ${editErrors.dealStageId ? styles.cellError : ""}`}
-                        value={editForm.dealStageId}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, dealStageId: event.target.value }))}
-                        disabled={isEditSubmitting || !lookups}
-                        aria-invalid={Boolean(editErrors.dealStageId) || undefined}
-                        title={editErrors.dealStageId}
-                      >
-                        <option value="" disabled>
-                          Выберите
-                        </option>
-                        {(lookups?.dealStages ?? []).map((item) => (
-                          <option key={item.id} value={String(item.id)}>
-                            {item.name}
+                  {showActiveColumns && (
+                    <Td>
+                      {isEditing ? (
+                        <select
+                          className={`${styles.cellSelect} ${editErrors.dealStageId ? styles.cellError : ""}`}
+                          value={editForm.dealStageId}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({ ...prev, dealStageId: event.target.value }))
+                          }
+                          disabled={isEditSubmitting || !lookups}
+                          aria-invalid={Boolean(editErrors.dealStageId) || undefined}
+                          title={editErrors.dealStageId}
+                        >
+                          <option value="" disabled>
+                            Выберите
                           </option>
-                        ))}
-                      </select>
-                    ) : (
-                      deal.dealStageName
-                    )}
-                  </Td>
+                          {(lookups?.dealStages ?? []).map((item) => (
+                            <option key={item.id} value={String(item.id)}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        deal.dealStageName
+                      )}
+                    </Td>
+                  )}
 	                  <Td>{deal.managerName}</Td>
                   <Td>{formatDateTime(deal.createdAt)}</Td>
                   {showCompletionColumn && (
@@ -565,7 +741,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                                 title="Потребность и комментарий"
                                 disabled={Boolean(editingDealId)}
                               >
-                                <Icon name="search" size={18} />
+                                <Icon name="details" size={18} />
                               </IconButton>
                               <IconButton
                                 tone="neutral"

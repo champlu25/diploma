@@ -318,6 +318,86 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
   }
 });
 
+app.patch("/api/auth/me", requireAuth, async (req, res) => {
+  const lastName = normalizeOptionalText(req.body?.lastName);
+  const firstName = normalizeOptionalText(req.body?.firstName);
+  const middleName = normalizeOptionalText(req.body?.middleName);
+
+  try {
+    const updatedResult = await pool.query(
+      `
+        UPDATE users
+        SET
+          last_name = $1,
+          first_name = $2,
+          middle_name = $3
+        WHERE id = $4
+        RETURNING id, username, last_name, first_name, middle_name, must_change_password, role_id, group_lead_user_id
+      `,
+      [lastName, firstName, middleName, req.auth.sub]
+    );
+
+    if (updatedResult.rowCount === 0) {
+      res.clearCookie(authCookieName, getEmptyAuthCookieOptions());
+      res.status(401).json({
+        message: "Сессия недействительна. Войдите снова.",
+      });
+      return;
+    }
+
+    const user = updatedResult.rows[0];
+
+    const roleResult = await pool.query(
+      `
+        SELECT name
+        FROM roles
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [user.role_id]
+    );
+
+    const role = roleResult.rowCount > 0 ? roleResult.rows[0].name : null;
+
+    const groupLeadUsernameResult =
+      user.group_lead_user_id === null
+        ? null
+        : await pool.query(
+            `
+              SELECT username
+              FROM users
+              WHERE id = $1
+              LIMIT 1
+            `,
+            [user.group_lead_user_id]
+          );
+
+    const groupLeadUsername =
+      groupLeadUsernameResult && groupLeadUsernameResult.rowCount > 0
+        ? groupLeadUsernameResult.rows[0].username
+        : null;
+
+    res.status(200).json({
+      user: {
+        id: user.id,
+        username: user.username,
+        lastName: user.last_name,
+        firstName: user.first_name,
+        middleName: user.middle_name,
+        role,
+        mustChangePassword: user.must_change_password,
+        groupLeadUserId: user.group_lead_user_id,
+        groupLeadUsername,
+      },
+    });
+  } catch (error) {
+    console.error("Не удалось обновить профиль:", error);
+    res.status(500).json({
+      message: "Не удалось обновить профиль.",
+    });
+  }
+});
+
 app.post("/api/auth/login", async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password =
@@ -408,9 +488,9 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
   const newPassword =
     typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
 
-  if (!oldPassword || !newPassword) {
+  if (!newPassword) {
     res.status(400).json({
-      message: "Поля oldPassword и newPassword обязательны.",
+      message: "Поле newPassword обязательно.",
     });
     return;
   }
@@ -428,7 +508,8 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
       `
         SELECT
           id,
-          password_hash
+          password_hash,
+          must_change_password
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -445,11 +526,22 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    if (!verifyPassword(oldPassword, user.password_hash)) {
-      res.status(400).json({
-        message: "Старый пароль введён неверно.",
-      });
-      return;
+    const canSkipOldPassword = Boolean(user.must_change_password);
+
+    if (!canSkipOldPassword) {
+      if (!oldPassword) {
+        res.status(400).json({
+          message: "Поле oldPassword обязательно.",
+        });
+        return;
+      }
+
+      if (!verifyPassword(oldPassword, user.password_hash)) {
+        res.status(400).json({
+          message: "Старый пароль введён неверно.",
+        });
+        return;
+      }
     }
 
     const nextHash = hashPassword(newPassword);
@@ -1330,17 +1422,20 @@ app.get("/api/deals/lookups", requireAuth, async (_req, res) => {
 
 app.get("/api/deals", requireAuth, async (req, res) => {
   const currentUserId = Number(req.auth.sub);
+  const companyIdFilter = parseUserId(req.query?.companyId);
 
   try {
     let params = [currentUserId];
-    let whereSql = "WHERE c.manager_user_id = $1";
+    const whereParts = ["c.manager_user_id = $1"];
 
     if (req.auth.role === "owner") {
       params = [];
-      whereSql = "";
+      whereParts.length = 0;
     } else if (req.auth.role === "group_lead") {
-      whereSql = `
-        WHERE c.manager_user_id = $1
+      whereParts.length = 0;
+      whereParts.push(`
+        (
+          c.manager_user_id = $1
           OR c.manager_user_id IN (
             SELECT u.id
             FROM users AS u
@@ -1348,8 +1443,16 @@ app.get("/api/deals", requireAuth, async (req, res) => {
             WHERE u.group_lead_user_id = $1
               AND r.name = 'manager'
           )
-      `;
+        )
+      `);
     }
+
+    if (companyIdFilter) {
+      params.push(companyIdFilter);
+      whereParts.push(`d.company_id = $${params.length}`);
+    }
+
+    const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
 
     const result = await pool.query(
       `
@@ -2299,6 +2402,84 @@ app.post("/api/owner/users/:userId/reset-password", requireOwner, async (req, re
     console.error("Не удалось сбросить пароль:", error);
     res.status(500).json({
       message: "Не удалось сбросить пароль.",
+    });
+  }
+});
+
+app.get("/api/owner/leasing-companies", requireOwner, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          name
+        FROM leasing_companies
+        ORDER BY id ASC
+      `
+    );
+
+    res.status(200).json({
+      leasingCompanies: result.rows,
+    });
+  } catch (error) {
+    console.error("Не удалось получить лизинговые компании:", error);
+    res.status(500).json({
+      message: "Не удалось получить лизинговые компании.",
+    });
+  }
+});
+
+app.post("/api/owner/leasing-companies", requireOwner, async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+
+  if (!name) {
+    res.status(400).json({
+      message: "Поле name обязательно.",
+    });
+    return;
+  }
+
+  if (name.length > 160) {
+    res.status(400).json({
+      message: "Название слишком длинное.",
+    });
+    return;
+  }
+
+  try {
+    const duplicateResult = await pool.query(
+      `
+        SELECT 1
+        FROM leasing_companies
+        WHERE LOWER(name) = LOWER($1)
+        LIMIT 1
+      `,
+      [name]
+    );
+
+    if (duplicateResult.rowCount > 0) {
+      res.status(409).json({
+        message: "Такая лизинговая компания уже существует.",
+      });
+      return;
+    }
+
+    const createdResult = await pool.query(
+      `
+        INSERT INTO leasing_companies (name)
+        VALUES ($1)
+        RETURNING id, name
+      `,
+      [name]
+    );
+
+    res.status(201).json({
+      leasingCompany: createdResult.rows[0],
+    });
+  } catch (error) {
+    console.error("Не удалось создать лизинговую компанию:", error);
+    res.status(500).json({
+      message: "Не удалось создать лизинговую компанию.",
     });
   }
 });

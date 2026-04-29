@@ -13,7 +13,7 @@ interface AppShellProps {
   currentUser: AuthUser;
   onLogout: () => Promise<void>;
   sessionError: string | null;
-  onPasswordChanged?: () => void;
+  onPasswordChanged?: () => void | Promise<void>;
 }
 
 export function AppShell({
@@ -24,12 +24,10 @@ export function AppShell({
 }: AppShellProps) {
   const location = useLocation();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const homeLabel = currentUser.role === "owner" ? "Пользователи" : "Главная";
-  const isHomeActive = location.pathname === "/";
   const isCompaniesActive = location.pathname.startsWith("/companies");
   const isDealsActive = location.pathname.startsWith("/deals");
   const isDashboardsActive = location.pathname.startsWith("/dashboards");
-  const homeIcon = currentUser.role === "owner" ? "users" : "home";
+  const isSettingsActive = location.pathname.startsWith("/settings");
 
   useEffect(() => {
     if (currentUser.mustChangePassword) {
@@ -43,10 +41,6 @@ export function AppShell({
         <div className={styles.brand}>БЛИК CRM</div>
 
         <nav className={styles.nav} aria-label="Навигация">
-          <Link to="/" className={clsx(styles.link, isHomeActive && styles.active)}>
-            <Icon name={homeIcon} size={16} />
-            {homeLabel}
-          </Link>
           <Link
             to="/companies"
             className={clsx(styles.link, isCompaniesActive && styles.active)}
@@ -72,11 +66,17 @@ export function AppShell({
             <div className={styles.email}>{currentUser.username}</div>
             <div className={styles.role}>{getRoleLabel(currentUser.role)}</div>
           </div>
-          <IconButton
-            onClick={() => void onLogout()}
-            aria-label="Выйти"
-            title="Выйти"
+
+          <Link
+            to="/settings"
+            className={clsx(styles.iconLink, isSettingsActive && styles.iconLinkActive)}
+            aria-label="Настройки"
+            title="Настройки"
           >
+            <Icon name="settings" size={18} />
+          </Link>
+
+          <IconButton onClick={() => void onLogout()} aria-label="Выйти" title="Выйти">
             <Icon name="logout" size={18} />
           </IconButton>
         </div>

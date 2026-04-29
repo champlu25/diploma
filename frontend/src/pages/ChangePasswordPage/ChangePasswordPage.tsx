@@ -13,7 +13,7 @@ import styles from "./ChangePasswordPage.module.scss";
 
 interface ChangePasswordPageProps {
   currentUser: AuthUser;
-  onPasswordChanged?: () => void;
+  onPasswordChanged?: () => void | Promise<void>;
 }
 
 export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePasswordPageProps) {
@@ -23,12 +23,13 @@ export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePas
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+
+  const mustChange = Boolean(currentUser.mustChangePassword);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!oldPassword || !newPassword || !confirmPassword) {
+    if ((!mustChange && !oldPassword) || !newPassword || !confirmPassword) {
       setError("Заполните все поля.");
       return;
     }
@@ -41,16 +42,14 @@ export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePas
     try {
       setIsSubmitting(true);
       setError(null);
-      setSuccess(null);
 
-      await changePassword(oldPassword, newPassword);
-      setSuccess("Пароль изменён.");
+      await changePassword(mustChange ? "" : oldPassword, newPassword);
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      onPasswordChanged?.();
+      await onPasswordChanged?.();
 
-      if (currentUser.mustChangePassword) {
+      if (mustChange) {
         navigate("/", { replace: true });
       }
     } catch (requestError) {
@@ -67,7 +66,7 @@ export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePas
           <div className={styles.header}>
             <h1 className={styles.title}>Смена пароля</h1>
             <p className={styles.subtitle}>
-              {currentUser.mustChangePassword
+              {mustChange
                 ? "Это временный пароль. Пожалуйста, задайте новый."
                 : "Для смены пароля введите старый и новый."}
             </p>
@@ -76,15 +75,17 @@ export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePas
           <Divider />
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
-            <InputField
-              label="Старый пароль"
-              type="password"
-              value={oldPassword}
-              onChange={(event) => setOldPassword(event.target.value)}
-              disabled={isSubmitting}
-              autoComplete="current-password"
-              required
-            />
+            {!mustChange && (
+              <InputField
+                label="Старый пароль"
+                type="password"
+                value={oldPassword}
+                onChange={(event) => setOldPassword(event.target.value)}
+                disabled={isSubmitting}
+                autoComplete="current-password"
+                required
+              />
+            )}
 
             <InputField
               label="Новый пароль"
@@ -107,7 +108,6 @@ export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePas
             />
 
             {error && <Alert tone="error">{error}</Alert>}
-            {success && <Alert tone="success">{success}</Alert>}
 
             <Button type="submit" fullWidth disabled={isSubmitting}>
               {isSubmitting ? <Spinner size={22} /> : "Сохранить"}
@@ -118,4 +118,3 @@ export function ChangePasswordPage({ currentUser, onPasswordChanged }: ChangePas
     </div>
   );
 }
-

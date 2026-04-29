@@ -86,6 +86,13 @@ export const getDeals = async (): Promise<Deal[]> => {
   return data.deals.map(toDeal);
 };
 
+export const getDealsByCompanyId = async (companyId: number): Promise<Deal[]> => {
+  const { data } = await httpClient.get<ListDealsResponse>("/api/deals", {
+    params: { companyId },
+  });
+  return data.deals.map(toDeal);
+};
+
 export const getDealLookups = async (): Promise<DealLookups> => {
   const { data } = await httpClient.get<LookupsResponse>("/api/deals/lookups");
   return data;

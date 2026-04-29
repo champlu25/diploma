@@ -37,13 +37,14 @@
 
 .actions {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 2px;
   justify-content: center;
   width: 100%;
 }
 
 .actions button {
-  padding: 6px;
+  padding: 4px;
   border-radius: 10px;
 }
 

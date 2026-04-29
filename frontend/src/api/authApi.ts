@@ -38,3 +38,12 @@ export const getCurrentUser = async (): Promise<AuthUser | null> => {
 export const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
   await httpClient.post("/api/auth/change-password", { oldPassword, newPassword });
 };
+
+export const updateCurrentUserProfile = async (params: {
+  lastName: string | null;
+  firstName: string | null;
+  middleName: string | null;
+}): Promise<AuthUser> => {
+  const { data } = await httpClient.patch<AuthResponse>("/api/auth/me", params);
+  return data.user;
+};

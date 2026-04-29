@@ -8,7 +8,7 @@ import {
   updateCompany,
 } from "../../api/companiesApi";
 import { createDeal, getDealLookups } from "../../api/dealsApi";
-import { getTransferTargets } from "../../api/usersApi";
+import { getGroupLeadManagers, getTransferTargets, getUsers } from "../../api/usersApi";
 import type { Company, CompanyFormValues } from "../../types/company";
 import type { DealFormValues, DealLookups } from "../../types/deal";
 import type { AuthUser, User } from "../../types/user";
@@ -220,6 +220,10 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [searchName, setSearchName] = useState("");
   const [searchInn, setSearchInn] = useState("");
+  const [managerFilterUserId, setManagerFilterUserId] = useState("");
+  const [managerFilterOptions, setManagerFilterOptions] = useState<SelectFieldOption[]>([
+    { value: "", label: "Все менеджеры" },
+  ]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -268,6 +272,71 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     void loadCompanies();
   }, [loadCompanies]);
 
+  const showManagerFilter = currentUser.role === "owner" || currentUser.role === "group_lead";
+
+  useEffect(() => {
+    if (!showManagerFilter) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const getUserLabel = (user: {
+      username: string;
+      lastName: string | null;
+      firstName: string | null;
+      middleName?: string | null;
+    }) => {
+      const fullName = [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ");
+      return fullName ? `${user.username} — ${fullName}` : user.username;
+    };
+
+    const loadManagers = async () => {
+      try {
+        if (currentUser.role === "owner") {
+          const users = await getUsers();
+          const options: SelectFieldOption[] = users
+            .filter((user) => user.role === "manager" || user.role === "group_lead")
+            .map((user) => ({ value: String(user.id), label: getUserLabel(user) }))
+            .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+          if (!isCancelled) {
+            setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
+          }
+          return;
+        }
+
+        const managers = await getGroupLeadManagers();
+        const options: SelectFieldOption[] = managers
+          .map((manager) => ({ value: String(manager.id), label: getUserLabel(manager) }))
+          .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+        if (!isCancelled) {
+          setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
+        }
+      } catch {
+        if (!isCancelled) {
+          setManagerFilterOptions([{ value: "", label: "Все менеджеры" }]);
+        }
+      }
+    };
+
+    void loadManagers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser.role, showManagerFilter]);
+
+  useEffect(() => {
+    if (!showManagerFilter) return;
+    if (!managerFilterUserId) return;
+    const exists = managerFilterOptions.some((option) => option.value === managerFilterUserId);
+    if (!exists) {
+      setManagerFilterUserId("");
+    }
+  }, [managerFilterOptions, managerFilterUserId, showManagerFilter]);
+
   const filteredCompanies = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
     const innFilter = searchInn.trim();
@@ -275,9 +344,11 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     return companies.filter((company) => {
       const matchesName = !nameFilter || company.name.toLowerCase().includes(nameFilter);
       const matchesInn = !innFilter || company.inn.includes(innFilter);
-      return matchesName && matchesInn;
+      const matchesManager =
+        !managerFilterUserId || String(company.managerUserId) === managerFilterUserId;
+      return matchesName && matchesInn && matchesManager;
     });
-  }, [companies, searchInn, searchName]);
+  }, [companies, managerFilterUserId, searchInn, searchName]);
 
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -551,6 +622,16 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             inputMode="numeric"
           />
         </div>
+        {showManagerFilter && (
+          <div className={styles.filtersGrow}>
+            <SelectField
+              label="Менеджер"
+              value={managerFilterUserId}
+              onChange={(event) => setManagerFilterUserId(event.target.value)}
+              options={managerFilterOptions}
+            />
+          </div>
+        )}
         <div className={styles.filtersActions}>
           <IconButton
             onClick={() => {
@@ -569,33 +650,33 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       <DataTable>
         <thead>
           <Tr>
-              <Th style={{ width: showManagerColumn ? "18%" : "20%" }}>
+              <Th style={{ width: showManagerColumn ? "15%" : "25%" }}>
                 Наименование
               </Th>
               {showManagerColumn && (
-                <Th style={{ width: "14%" }}>
+                <Th style={{ width: "10%" }}>
                   Менеджер
                 </Th>
               )}
-              <Th style={{ width: "9%" }}>
+              <Th style={{ width: "7%" }}>
                 ИНН
               </Th>
-              <Th style={{ width: "11%" }}>
+              <Th style={{ width: "10%" }}>
                 Контакт
               </Th>
-              <Th style={{ width: "10%" }}>
+              <Th style={{ width: "9%" }}>
                 Телефон
               </Th>
-              <Th style={{ width: "13%" }}>
+              <Th style={{ width: "15%" }}>
                 Почта
               </Th>
-              <Th style={{ width: "15%" }}>
+              <Th style={{ width: "13%" }}>
                 Комментарий
               </Th>
-              <Th style={{ width: "12%" }}>
+              <Th style={{ width: "11%" }}>
                 Связаться
               </Th>
-              <Th style={{ width: "8%", textAlign: "left" }}>
+              <Th style={{ width: "10%", textAlign: "left" }}>
                 Действия
               </Th>
             </Tr>
@@ -759,8 +840,22 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                           </>
                         ) : (
                           <>
+                              <IconButton
+                                tone="neutral"
+                              onClick={() => {
+                                const params = new URLSearchParams({
+                                  companyId: String(company.id),
+                                });
+                                navigate(`/deals?${params.toString()}`, {
+                                  state: { companyName: company.name },
+                                });
+                              }}
+                                title="Перейти к сделкам компании"
+                              >
+                                <Icon name="arrowRight" size={18} />
+                              </IconButton>
                             <IconButton tone="neutral" onClick={() => openCreateDealModal(company)} title="Создать сделку">
-                              <Icon name="deals" size={18} />
+                              <Icon name="plus" size={18} />
                             </IconButton>
                             <IconButton tone="neutral" onClick={() => openInlineEdit(company)} title="Редактировать">
                               <Icon name="edit" size={18} />

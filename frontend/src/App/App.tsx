@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { getCurrentUser, logout } from "../api/authApi";
 import { AppShell } from "../components/AppShell/AppShell";
-import { AdminPage } from "../pages/AdminPage/AdminPage";
 import { CompaniesPage } from "../pages/CompaniesPage/CompaniesPage";
 import { DashboardsPage } from "../pages/DashboardsPage/DashboardsPage";
 import { DealsPage } from "../pages/DealsPage/DealsPage";
 import { LoginPage } from "../pages/LoginPage/LoginPage";
-import { UserHomePage } from "../pages/UserHomePage/UserHomePage";
+import { SettingsPage } from "../pages/SettingsPage/SettingsPage";
 import type { AuthUser } from "../types/user";
 import { getApiErrorMessage } from "../utils/httpError";
 import { Spinner } from "../components/ui/Spinner/Spinner";
@@ -70,6 +69,10 @@ function App() {
     }
   }, []);
 
+  const handleCurrentUserUpdated = useCallback((nextUser: AuthUser) => {
+    setCurrentUser(nextUser);
+  }, []);
+
   if (isSessionLoading) {
     return (
       <div className={styles.loading}>
@@ -111,10 +114,10 @@ function App() {
           <Route
             index
             element={
-              currentUser?.role === "owner" ? (
-                <AdminPage currentUser={currentUser!} />
+              currentUser?.mustChangePassword ? (
+                <Navigate to="settings" replace />
               ) : (
-                <UserHomePage currentUser={currentUser!} />
+                <Navigate to="deals" replace />
               )
             }
           />
@@ -146,6 +149,15 @@ function App() {
               ) : (
                 <DashboardsPage currentUser={currentUser!} />
               )
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <SettingsPage
+                currentUser={currentUser!}
+                onCurrentUserUpdated={handleCurrentUserUpdated}
+              />
             }
           />
         </Route>
