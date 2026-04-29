@@ -188,4 +188,10 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 6px;
+  position: sticky;
+  bottom: 0;
+  padding-top: 12px;
+  padding-bottom: 6px;
+  background: var(--color-surface);
+  border-top: 1px solid rgba(214, 224, 234, 0.7);
 }

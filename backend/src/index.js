@@ -582,7 +582,9 @@ app.get("/api/users", requireOwner, async (_req, res) => {
           r.name AS role,
           u.group_lead_user_id,
           gl.username AS group_lead_username,
-          u.must_change_password
+          u.must_change_password,
+          u.created_at,
+          u.updated_at
         FROM users AS u
         JOIN roles AS r ON r.id = u.role_id
         LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
@@ -1392,6 +1394,7 @@ app.get("/api/deals/lookups", requireAuth, async (_req, res) => {
             id,
             name
           FROM leasing_companies
+          WHERE is_active = TRUE
           ORDER BY id ASC
         `
         ),
@@ -2412,9 +2415,12 @@ app.get("/api/owner/leasing-companies", requireOwner, async (_req, res) => {
       `
         SELECT
           id,
-          name
+          name,
+          is_active AS "isActive",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
         FROM leasing_companies
-        ORDER BY id ASC
+        ORDER BY is_active DESC, id ASC
       `
     );
 
@@ -2466,9 +2472,14 @@ app.post("/api/owner/leasing-companies", requireOwner, async (req, res) => {
 
     const createdResult = await pool.query(
       `
-        INSERT INTO leasing_companies (name)
-        VALUES ($1)
-        RETURNING id, name
+        INSERT INTO leasing_companies (name, is_active)
+        VALUES ($1, TRUE)
+        RETURNING
+          id,
+          name,
+          is_active AS "isActive",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
       `,
       [name]
     );
@@ -2480,6 +2491,147 @@ app.post("/api/owner/leasing-companies", requireOwner, async (req, res) => {
     console.error("Не удалось создать лизинговую компанию:", error);
     res.status(500).json({
       message: "Не удалось создать лизинговую компанию.",
+    });
+  }
+});
+
+app.patch("/api/owner/leasing-companies/:leasingCompanyId", requireOwner, async (req, res) => {
+  const leasingCompanyId = parseUserId(req.params?.leasingCompanyId);
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : null;
+  const isActive =
+    typeof req.body?.isActive === "boolean" ? req.body.isActive : null;
+
+  if (!leasingCompanyId) {
+    res.status(400).json({
+      message: "Некорректный leasingCompanyId.",
+    });
+    return;
+  }
+
+  if (name === null && isActive === null) {
+    res.status(400).json({
+      message: "Нечего обновлять.",
+    });
+    return;
+  }
+
+  if (name !== null) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      res.status(400).json({
+        message: "Поле name обязательно.",
+      });
+      return;
+    }
+
+    if (trimmed.length > 160) {
+      res.status(400).json({
+        message: "Название слишком длинное.",
+      });
+      return;
+    }
+  }
+
+  try {
+    const nextName = name === null ? null : name.trim();
+
+    if (nextName !== null) {
+      const duplicateResult = await pool.query(
+        `
+          SELECT 1
+          FROM leasing_companies
+          WHERE LOWER(name) = LOWER($1)
+            AND id <> $2
+          LIMIT 1
+        `,
+        [nextName, leasingCompanyId]
+      );
+
+      if (duplicateResult.rowCount > 0) {
+        res.status(409).json({
+          message: "Такая лизинговая компания уже существует.",
+        });
+        return;
+      }
+    }
+
+    const updatedResult = await pool.query(
+      `
+        UPDATE leasing_companies
+        SET
+          name = COALESCE($1, name),
+          is_active = COALESCE($2, is_active),
+          updated_at = NOW()
+        WHERE id = $3
+        RETURNING
+          id,
+          name,
+          is_active AS "isActive",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+      `,
+      [nextName, isActive, leasingCompanyId]
+    );
+
+    if (updatedResult.rowCount === 0) {
+      res.status(404).json({
+        message: "Лизинговая компания не найдена.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      leasingCompany: updatedResult.rows[0],
+    });
+  } catch (error) {
+    console.error("Не удалось обновить лизинговую компанию:", error);
+    res.status(500).json({
+      message: "Не удалось обновить лизинговую компанию.",
+    });
+  }
+});
+
+app.delete("/api/owner/leasing-companies/:leasingCompanyId", requireOwner, async (req, res) => {
+  const leasingCompanyId = parseUserId(req.params?.leasingCompanyId);
+
+  if (!leasingCompanyId) {
+    res.status(400).json({
+      message: "Некорректный leasingCompanyId.",
+    });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        DELETE FROM leasing_companies
+        WHERE id = $1
+        RETURNING id
+      `,
+      [leasingCompanyId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        message: "Лизинговая компания не найдена.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Лизинговая компания удалена.",
+    });
+  } catch (error) {
+    if (error?.code === "23503") {
+      res.status(409).json({
+        message: "Нельзя удалить: лизинговая компания используется в сделках.",
+      });
+      return;
+    }
+
+    console.error("Не удалось удалить лизинговую компанию:", error);
+    res.status(500).json({
+      message: "Не удалось удалить лизинговую компанию.",
     });
   }
 });

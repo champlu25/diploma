@@ -10,18 +10,26 @@ import {
   type CreateUserRole,
   type GroupManager,
 } from "../../api/usersApi";
-import { createOwnerLeasingCompany, getOwnerLeasingCompanies } from "../../api/leasingCompaniesApi";
+import {
+  createOwnerLeasingCompany,
+  getOwnerLeasingCompanies,
+  setOwnerLeasingCompanyActive,
+  updateOwnerLeasingCompany,
+  type LeasingCompany,
+} from "../../api/leasingCompaniesApi";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Badge } from "../../components/ui/Badge/Badge";
 import { Button } from "../../components/ui/Button/Button";
+import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { Divider } from "../../components/ui/Divider/Divider";
 import { InputField, SelectField } from "../../components/ui/Field/Field";
+import { Icon } from "../../components/ui/Icon/Icon";
+import { IconButton } from "../../components/ui/IconButton/IconButton";
 import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { getRoleLabel } from "../../utils/roles";
-import type { DealLookupItem } from "../../types/deal";
 import styles from "./SettingsPage.module.scss";
 
 interface SettingsPageProps {
@@ -128,12 +136,33 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
-  const [leasingCompanies, setLeasingCompanies] = useState<DealLookupItem[]>([]);
+  const [leasingCompanies, setLeasingCompanies] = useState<LeasingCompany[]>([]);
   const [isLeasingCompaniesLoading, setIsLeasingCompaniesLoading] = useState(false);
   const [leasingCompaniesError, setLeasingCompaniesError] = useState<string | null>(null);
   const [leasingCompanyName, setLeasingCompanyName] = useState("");
   const [isLeasingCompanyCreating, setIsLeasingCompanyCreating] = useState(false);
   const [leasingCompanyCreateError, setLeasingCompanyCreateError] = useState<string | null>(null);
+  const [leasingEditModalOpen, setLeasingEditModalOpen] = useState(false);
+  const [leasingEditCandidate, setLeasingEditCandidate] = useState<LeasingCompany | null>(null);
+  const [leasingEditName, setLeasingEditName] = useState("");
+  const [isLeasingCompanyUpdating, setIsLeasingCompanyUpdating] = useState(false);
+  const [leasingCompanyUpdateError, setLeasingCompanyUpdateError] = useState<string | null>(null);
+  const [deletingLeasingCompanyId, setDeletingLeasingCompanyId] = useState<number | null>(null);
+
+  const formatDateTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+
+    return date.toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createUsername, setCreateUsername] = useState("");
@@ -235,6 +264,57 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
       );
     } finally {
       setIsLeasingCompanyCreating(false);
+    }
+  };
+
+  const openEditLeasingCompany = (company: LeasingCompany) => {
+    setLeasingCompanyUpdateError(null);
+    setLeasingEditCandidate(company);
+    setLeasingEditName(company.name);
+    setLeasingEditModalOpen(true);
+  };
+
+  const handleUpdateLeasingCompany = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!leasingEditCandidate) return;
+
+    if (!leasingEditName.trim()) {
+      setLeasingCompanyUpdateError("Введите название лизинговой компании.");
+      return;
+    }
+
+    try {
+      setIsLeasingCompanyUpdating(true);
+      setLeasingCompanyUpdateError(null);
+      await updateOwnerLeasingCompany(leasingEditCandidate.id, leasingEditName.trim());
+      setLeasingEditModalOpen(false);
+      setLeasingEditCandidate(null);
+      setLeasingEditName("");
+      await loadLeasingCompanies();
+    } catch (requestError) {
+      setLeasingCompanyUpdateError(
+        getApiErrorMessage(requestError, "Не удалось обновить лизинговую компанию."),
+      );
+    } finally {
+      setIsLeasingCompanyUpdating(false);
+    }
+  };
+
+  const handleToggleLeasingCompanyActive = async (company: LeasingCompany) => {
+    const action = company.isActive ? "архивировать" : "восстановить";
+    const confirmed = window.confirm(`Вы уверены, что хотите ${action} «${company.name}»?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingLeasingCompanyId(company.id);
+      setLeasingCompaniesError(null);
+      await setOwnerLeasingCompanyActive(company.id, !company.isActive);
+      await loadLeasingCompanies();
+    } catch (requestError) {
+      setLeasingCompaniesError(getApiErrorMessage(requestError, "Не удалось обновить лизинговую компанию."));
+    } finally {
+      setDeletingLeasingCompanyId(null);
     }
   };
 
@@ -359,6 +439,13 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               Сменить пароль
             </Button>
           </div>
+
+          {currentUser.role === "manager" && (
+            <div className={styles.userCardMeta}>
+              Руководитель:{" "}
+              <strong>{currentUser.groupLeadUsername ? currentUser.groupLeadUsername : "не назначен"}</strong>
+            </div>
+          )}
         </form>
       </section>
 
@@ -457,6 +544,13 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                           Руководитель: <strong>{user.groupLeadUsername}</strong>
                         </div>
                       )}
+
+                      <div className={styles.userCardMeta}>
+                        Создан: <strong>{formatDateTime(user.createdAt)}</strong>
+                      </div>
+                      <div className={styles.userCardMeta}>
+                        Обновлён: <strong>{formatDateTime(user.updatedAt)}</strong>
+                      </div>
                     </div>
 
                     <div className={styles.userCardActions}>
@@ -645,17 +739,66 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
           )}
 
           {!isLeasingCompaniesLoading && !leasingCompaniesError && (
-            <div className={styles.leasingList}>
-              {leasingCompanies.length === 0 ? (
-                <div className={styles.emptyText}>Лизинговых компаний пока нет.</div>
-              ) : (
-                leasingCompanies.map((company) => (
-                  <div key={company.id} className={styles.leasingRow}>
-                    <div className={styles.leasingName}>{company.name}</div>
-                  </div>
-                ))
-              )}
-            </div>
+            <DataTable>
+              <thead>
+                <Tr>
+                  <Th style={{ width: "10%" }}>ID</Th>
+                  <Th style={{ width: "36%" }}>Название</Th>
+                  <Th style={{ width: "14%" }}>Статус</Th>
+                  <Th style={{ width: "20%" }}>Создано</Th>
+                  <Th style={{ width: "20%" }}>Обновлено</Th>
+                  <Th style={{ width: "10%" }}>Действия</Th>
+                </Tr>
+              </thead>
+              <tbody>
+                {leasingCompanies.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={6} style={{ textAlign: "center" }}>
+                      <span className={styles.emptyText}>Лизинговых компаний пока нет.</span>
+                    </Td>
+                  </Tr>
+                ) : (
+                  leasingCompanies.map((company) => (
+                    <Tr key={company.id}>
+                      <Td>{company.id}</Td>
+                      <Td>{company.name}</Td>
+                      <Td>
+                        {company.isActive ? <Badge>Активна</Badge> : <span className={styles.muted}>Архив</span>}
+                      </Td>
+                      <Td>{formatDateTime(company.createdAt)}</Td>
+                      <Td>{formatDateTime(company.updatedAt)}</Td>
+                      <Td>
+                        <div className={styles.leasingActions}>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => openEditLeasingCompany(company)}
+                            title="Редактировать"
+                            aria-label="Редактировать"
+                          >
+                            <Icon name="edit" size={18} />
+                          </IconButton>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => void handleToggleLeasingCompanyActive(company)}
+                            disabled={deletingLeasingCompanyId === company.id}
+                            title={company.isActive ? "Архивировать" : "Восстановить"}
+                            aria-label={company.isActive ? "Архивировать" : "Восстановить"}
+                          >
+                            {deletingLeasingCompanyId === company.id ? (
+                              <Spinner size={18} />
+                            ) : company.isActive ? (
+                              <Icon name="lock" size={18} />
+                            ) : (
+                              <Icon name="refresh" size={18} />
+                            )}
+                          </IconButton>
+                        </div>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </tbody>
+            </DataTable>
           )}
 
           <Divider />
@@ -681,6 +824,50 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               </div>
             )}
           </form>
+
+          <Modal
+            open={leasingEditModalOpen}
+            title="Редактировать лизинговую компанию"
+            onClose={() => {
+              if (isLeasingCompanyUpdating) return;
+              setLeasingEditModalOpen(false);
+              setLeasingEditCandidate(null);
+              setLeasingEditName("");
+              setLeasingCompanyUpdateError(null);
+            }}
+          >
+            <form className={styles.leasingEditForm} onSubmit={handleUpdateLeasingCompany} noValidate>
+              <InputField
+                label="Название"
+                value={leasingEditName}
+                onChange={(event) => setLeasingEditName(event.target.value)}
+                disabled={isLeasingCompanyUpdating}
+                required
+              />
+
+              {leasingCompanyUpdateError && (
+                <div className={styles.messages}>
+                  <Alert tone="error">{leasingCompanyUpdateError}</Alert>
+                </div>
+              )}
+
+              <Divider />
+
+              <div className={styles.actionsRow}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setLeasingEditModalOpen(false)}
+                  disabled={isLeasingCompanyUpdating}
+                >
+                  Отмена
+                </Button>
+                <Button type="submit" disabled={isLeasingCompanyUpdating}>
+                  {isLeasingCompanyUpdating ? <Spinner size={20} /> : "Сохранить"}
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </section>
       )}
     </div>

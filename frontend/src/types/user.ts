@@ -12,4 +12,7 @@ export interface AuthUser {
   groupLeadUsername?: string | null;
 }
 
-export type User = AuthUser;
+export interface User extends AuthUser {
+  createdAt: string;
+  updatedAt: string;
+}

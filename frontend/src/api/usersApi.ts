@@ -11,6 +11,8 @@ interface UserDto {
   group_lead_user_id?: number | null;
   group_lead_username?: string | null;
   must_change_password?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface UsersResponse {
@@ -27,6 +29,8 @@ const toUser = (dto: UserDto): User => ({
   groupLeadUserId: dto.group_lead_user_id ?? null,
   groupLeadUsername: dto.group_lead_username ?? null,
   mustChangePassword: dto.must_change_password ?? false,
+  createdAt: dto.created_at,
+  updatedAt: dto.updated_at,
 });
 
 export const getUsers = async (): Promise<User[]> => {

@@ -236,28 +236,23 @@
   font-weight: 550;
 }
 
-.leasingList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.leasingRow {
-  border: 1px solid rgba(214, 224, 234, 0.9);
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.leasingName {
-  font-weight: 650;
-  color: var(--color-text-primary);
-}
-
 .leasingCreateForm {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.leasingEditForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leasingActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .leasingCreateRow {

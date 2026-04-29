@@ -10,9 +10,7 @@ $$;
 
 CREATE TABLE roles (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0)
 );
 
 CREATE TABLE users (
@@ -45,30 +43,25 @@ CREATE TABLE companies (
 
 CREATE TABLE deal_statuses (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0)
 );
 
 CREATE TABLE deal_lifecycle_statuses (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0)
 );
 
 CREATE TABLE leasing_companies (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE deal_stages (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0)
 );
 
 CREATE TABLE deals (
@@ -98,11 +91,6 @@ CREATE INDEX idx_deals_deal_lifecycle_status_id ON deals(deal_lifecycle_status_i
 CREATE INDEX idx_deals_deal_stage_id ON deals(deal_stage_id);
 CREATE INDEX idx_deals_leasing_company_id ON deals(leasing_company_id);
 
-CREATE TRIGGER trg_roles_set_updated_at
-BEFORE UPDATE ON roles
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER trg_users_set_updated_at
 BEFORE UPDATE ON users
 FOR EACH ROW
@@ -113,23 +101,8 @@ BEFORE UPDATE ON companies
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER trg_deal_statuses_set_updated_at
-BEFORE UPDATE ON deal_statuses
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_deal_lifecycle_statuses_set_updated_at
-BEFORE UPDATE ON deal_lifecycle_statuses
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER trg_leasing_companies_set_updated_at
 BEFORE UPDATE ON leasing_companies
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_deal_stages_set_updated_at
-BEFORE UPDATE ON deal_stages
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 

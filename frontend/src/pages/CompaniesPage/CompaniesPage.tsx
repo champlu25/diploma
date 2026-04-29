@@ -214,6 +214,21 @@ const formatContactDate = (dateString: string | null) => {
   return { text, statusText, tone: getContactStatusTone(diffDays) };
 };
 
+const formatDateTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const navigate = useNavigate();
 
@@ -380,7 +395,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     [companies, editingCompanyId],
   );
 
-  const openInlineEdit = (company: Company) => {
+  const openEditModal = (company: Company) => {
     setError(null);
     setEditingCompanyId(company.id);
     setEditForm({
@@ -395,13 +410,14 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setEditErrors({});
   };
 
-  const cancelInlineEdit = () => {
+  const closeEditModal = () => {
     setEditingCompanyId(null);
     setEditForm(emptyForm);
     setEditErrors({});
   };
 
-  const handleInlineSave = async () => {
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!editingCompany) {
       return;
     }
@@ -418,7 +434,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setError(null);
       const result = await updateCompany(editingCompany.id, editForm);
       setCompanies((prev) => prev.map((item) => (item.id === editingCompany.id ? result.company : item)));
-      cancelInlineEdit();
+      closeEditModal();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить компанию."));
     } finally {
@@ -650,7 +666,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       <DataTable>
         <thead>
           <Tr>
-              <Th style={{ width: showManagerColumn ? "15%" : "25%" }}>
+              <Th style={{ width: showManagerColumn ? "13%" : "22%" }}>
                 Наименование
               </Th>
               {showManagerColumn && (
@@ -658,7 +674,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                   Менеджер
                 </Th>
               )}
-              <Th style={{ width: "7%" }}>
+              <Th style={{ width: "9%" }}>
                 ИНН
               </Th>
               <Th style={{ width: "10%" }}>
@@ -676,6 +692,12 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               <Th style={{ width: "11%" }}>
                 Связаться
               </Th>
+              <Th style={{ width: "12%" }}>
+                Создано
+              </Th>
+              <Th style={{ width: "12%" }}>
+                Обновлено
+              </Th>
               <Th style={{ width: "10%", textAlign: "left" }}>
                 Действия
               </Th>
@@ -686,110 +708,37 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               const canManage = canManageCompany(company);
               const isDeleteSubmitting = isDeleteSubmittingId === company.id;
               const contact = formatContactDate(company.nextContactAt);
-              const isEditing = company.id === editingCompanyId;
 
               return (
                 <Tr key={company.id}>
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={`${styles.cellInput} ${editErrors.name ? styles.cellError : ""}`}
-                        value={editForm.name}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
-                        disabled={isEditSubmitting}
-                        required
-                        aria-invalid={Boolean(editErrors.name) || undefined}
-                        title={editErrors.name}
-                      />
-                    ) : (
-                      company.name
-                    )}
+                    {company.name}
                   </Td>
 
                   {showManagerColumn && <Td>{company.managerName}</Td>}
 
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={`${styles.cellInput} ${editErrors.inn ? styles.cellError : ""}`}
-                        value={editForm.inn}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, inn: event.target.value }))}
-                        disabled={isEditSubmitting}
-                        required
-                        inputMode="numeric"
-                        aria-invalid={Boolean(editErrors.inn) || undefined}
-                        title={editErrors.inn}
-                      />
-                    ) : (
-                      company.inn
-                    )}
+                    {company.inn}
                   </Td>
 
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={styles.cellInput}
-                        value={editForm.contactName}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, contactName: event.target.value }))}
-                        disabled={isEditSubmitting}
-                      />
-                    ) : (
-                      company.contactName || "—"
-                    )}
+                    {company.contactName || "—"}
                   </Td>
 
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={styles.cellInput}
-                        value={editForm.phone}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
-                        disabled={isEditSubmitting}
-                      />
-                    ) : (
-                      company.phone || "—"
-                    )}
+                    {company.phone || "—"}
                   </Td>
 
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={`${styles.cellInput} ${editErrors.email ? styles.cellError : ""}`}
-                        value={editForm.email}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
-                        disabled={isEditSubmitting}
-                        aria-invalid={Boolean(editErrors.email) || undefined}
-                        title={editErrors.email}
-                      />
-                    ) : (
-                      company.email || "—"
-                    )}
+                    {company.email || "—"}
                   </Td>
 
                   <Td>
-                    {isEditing ? (
-                      <textarea
-                        className={styles.cellTextarea}
-                        value={editForm.comment}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
-                        disabled={isEditSubmitting}
-                        rows={2}
-                      />
-                    ) : (
-                      company.comment || "—"
-                    )}
+                    {company.comment || "—"}
                   </Td>
 
                   <Td>
-                    {isEditing ? (
-                      <input
-                        className={styles.cellInput}
-                        type="datetime-local"
-                        value={editForm.nextContactAt}
-                        onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
-                        disabled={isEditSubmitting}
-                      />
-                    ) : contact.text === "—" ? (
+                    {contact.text === "—" ? (
                       <span className={styles.muted}>—</span>
                     ) : (
                       <div className={styles.contact}>
@@ -811,37 +760,16 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                     )}
                   </Td>
 
+                  <Td>{formatDateTime(company.createdAt)}</Td>
+                  <Td>{formatDateTime(company.updatedAt)}</Td>
+
                   <Td style={{ textAlign: "center" }}>
                     {canManage ? (
                       <div className={styles.actions}>
-                        {isEditing ? (
-                          <>
-                            {canTransferCompanies && (
-                              <IconButton tone="neutral" onClick={() => void openTransferModal(company)} title="Передать">
-                                <Icon name="users" size={18} />
-                              </IconButton>
-                            )}
+                        <>
+                          <div className={styles.actionRow}>
                             <IconButton
                               tone="neutral"
-                              onClick={() => void handleInlineSave()}
-                              disabled={isEditSubmitting}
-                              title="Сохранить"
-                            >
-                              {isEditSubmitting ? <Spinner size={18} /> : <Icon name="check" size={18} />}
-                            </IconButton>
-                            <IconButton
-                              tone="neutral"
-                              onClick={cancelInlineEdit}
-                              disabled={isEditSubmitting}
-                              title="Отменить"
-                            >
-                              <Icon name="x" size={18} />
-                            </IconButton>
-                          </>
-                        ) : (
-                          <>
-                              <IconButton
-                                tone="neutral"
                               onClick={() => {
                                 const params = new URLSearchParams({
                                   companyId: String(company.id),
@@ -850,16 +778,18 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                                   state: { companyName: company.name },
                                 });
                               }}
-                                title="Перейти к сделкам компании"
-                              >
-                                <Icon name="arrowRight" size={18} />
-                              </IconButton>
+                              title="Перейти к сделкам компании"
+                            >
+                              <Icon name="arrowRight" size={18} />
+                            </IconButton>
                             <IconButton tone="neutral" onClick={() => openCreateDealModal(company)} title="Создать сделку">
                               <Icon name="plus" size={18} />
                             </IconButton>
-                            <IconButton tone="neutral" onClick={() => openInlineEdit(company)} title="Редактировать">
+                            <IconButton tone="neutral" onClick={() => openEditModal(company)} title="Редактировать">
                               <Icon name="edit" size={18} />
                             </IconButton>
+                          </div>
+                          <div className={styles.actionRow}>
                             {canTransferCompanies && (
                               <IconButton tone="neutral" onClick={() => void openTransferModal(company)} title="Передать">
                                 <Icon name="users" size={18} />
@@ -873,8 +803,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                             >
                               {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
                             </IconButton>
-                          </>
-                        )}
+                          </div>
+                        </>
                       </div>
                     ) : (
                       <span className={styles.muted}>—</span>
@@ -886,7 +816,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
               {filteredCompanies.length === 0 && (
                 <Tr>
-                  <Td colSpan={showManagerColumn ? 9 : 8} style={{ textAlign: "center" }}>
+                  <Td colSpan={showManagerColumn ? 11 : 10} style={{ textAlign: "center" }}>
                     <span className={styles.muted}>Компаний нет</span>
                   </Td>
                 </Tr>
@@ -973,6 +903,82 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(editingCompany)}
+        title={editingCompany ? `Редактировать — ${editingCompany.name}` : "Редактировать компанию"}
+        onClose={() => {
+          if (isEditSubmitting) return;
+          closeEditModal();
+        }}
+      >
+        {editingCompany && (
+          <form className={styles.modalForm} onSubmit={handleEditSubmit}>
+            <InputField
+              label="Наименование"
+              value={editForm.name}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+              required
+              error={editErrors.name}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="ИНН"
+              value={editForm.inn}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, inn: event.target.value }))}
+              required
+              error={editErrors.inn}
+              disabled={isEditSubmitting}
+              inputMode="numeric"
+            />
+
+            <InputField
+              label="Контактное лицо"
+              value={editForm.contactName}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, contactName: event.target.value }))}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="Телефон"
+              value={editForm.phone}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="Почта"
+              value={editForm.email}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
+              error={editErrors.email}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="Связаться"
+              type="datetime-local"
+              value={editForm.nextContactAt}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
+              disabled={isEditSubmitting}
+            />
+
+            <TextAreaField
+              label="Комментарий"
+              value={editForm.comment}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
+              disabled={isEditSubmitting}
+              rows={4}
+            />
+
+            <div className={styles.modalActions}>
+              <Button type="submit" disabled={isEditSubmitting}>
+                {isEditSubmitting ? <Spinner size={20} /> : "Сохранить"}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <Modal
