@@ -8,6 +8,7 @@ import { Card } from "../../components/ui/Card/Card";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import { PieChart } from "../../components/charts/PieChart/PieChart";
+import { InputField } from "../../components/ui/Field/Field";
 import styles from "./DashboardsPage.module.scss";
 
 interface DashboardsPageProps {
@@ -35,10 +36,24 @@ const toFiniteNumberOrZero = (value: unknown): number => {
 
 const formatNumberLike = (value: number): string => value.toLocaleString("ru-RU");
 
+const startOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const endOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+};
+
 export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [lookups, setLookups] = useState<{ dealLifecycleStatuses: { id: number; name: string }[] } | null>(null);
   const [selectedLifecycleStatusId, setSelectedLifecycleStatusId] = useState<number | null>(null);
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,10 +95,56 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     return lookups.dealLifecycleStatuses.find((item) => item.id === selectedLifecycleStatusId)?.name ?? null;
   }, [lookups, selectedLifecycleStatusId]);
 
+  const period = useMemo(() => {
+    const fromDate = periodFrom ? startOfDay(new Date(`${periodFrom}T00:00:00`)) : null;
+    const toDate = periodTo ? endOfDay(new Date(`${periodTo}T00:00:00`)) : null;
+
+    const fromValid = fromDate && Number.isFinite(fromDate.getTime()) ? fromDate : null;
+    const toValid = toDate && Number.isFinite(toDate.getTime()) ? toDate : null;
+
+    const labelFrom = fromValid ? periodFrom : "—";
+    const labelTo = toValid ? periodTo : "—";
+
+    const label =
+      fromValid || toValid
+        ? `период: ${labelFrom} – ${labelTo}`
+        : "период: без фильтра";
+
+    return { from: fromValid, to: toValid, label };
+  }, [periodFrom, periodTo]);
+
   const filteredDeals = useMemo(() => {
     if (!selectedLifecycleStatusId) return [];
-    return deals.filter((deal) => deal.dealLifecycleStatusId === selectedLifecycleStatusId);
-  }, [deals, selectedLifecycleStatusId]);
+
+    const isRealized = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["реализ"]);
+    const isFailed = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["несост"]);
+    const isDelayed = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["отлож"]);
+
+    const fromMs = period.from ? period.from.getTime() : null;
+    const toMs = period.to ? period.to.getTime() : null;
+
+    return deals
+      .filter((deal) => deal.dealLifecycleStatusId === selectedLifecycleStatusId)
+      .filter((deal) => {
+        if (fromMs === null && toMs === null) return true;
+
+        const timeValue =
+          isRealized || isFailed
+            ? deal.completedAt
+            : isDelayed
+              ? deal.updatedAt
+              : deal.createdAt;
+
+        if (!timeValue) return false;
+        const date = new Date(timeValue);
+        if (Number.isNaN(date.getTime())) return false;
+
+        const ms = date.getTime();
+        if (fromMs !== null && ms < fromMs) return false;
+        if (toMs !== null && ms > toMs) return false;
+        return true;
+      });
+  }, [deals, period.from, period.to, selectedLifecycleStatusId, selectedLifecycleStatusName]);
 
   const leasingSegments = useMemo(() => {
     const counts = new Map<string, number>();
@@ -198,6 +259,23 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
         </nav>
       )}
 
+      <div className={styles.periodRow} aria-label="Фильтр по периоду">
+        <InputField
+          label="С даты"
+          type="date"
+          value={periodFrom}
+          onChange={(event) => setPeriodFrom(event.target.value)}
+          disabled={isLoading}
+        />
+        <InputField
+          label="По дату"
+          type="date"
+          value={periodTo}
+          onChange={(event) => setPeriodTo(event.target.value)}
+          disabled={isLoading}
+        />
+      </div>
+
       {error && (
         <Alert tone="error" className={styles.alert}>
           {error}
@@ -209,7 +287,9 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           <div className={styles.rowGrid} aria-label="Ключевые показатели и менеджеры">
             <Card
               title={incomeTitle}
-              subtitle={selectedLifecycleStatusName ? `Срез: ${selectedLifecycleStatusName}` : undefined}
+              subtitle={
+                selectedLifecycleStatusName ? `Срез: ${selectedLifecycleStatusName}, ${period.label}` : period.label
+              }
               className={`${styles.card} ${styles.fixedCard}`}
             >
               {isLoading ? (

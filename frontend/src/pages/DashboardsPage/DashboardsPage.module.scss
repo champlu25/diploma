@@ -60,6 +60,12 @@
   transform: scaleX(1);
 }
 
+.periodRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
 .alert {
   width: 100%;
 }
@@ -227,6 +233,12 @@
 }
 
 @media (min-width: 920px) {
+  .periodRow {
+    grid-template-columns: repeat(2, minmax(0, 260px));
+    align-items: end;
+    gap: 16px;
+  }
+
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px;
