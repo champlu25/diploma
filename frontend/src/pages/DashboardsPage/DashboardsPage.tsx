@@ -7,7 +7,6 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Card } from "../../components/ui/Card/Card";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
-import { PieChart } from "../../components/charts/PieChart/PieChart";
 import { InputField } from "../../components/ui/Field/Field";
 import styles from "./DashboardsPage.module.scss";
 
@@ -147,37 +146,53 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   }, [deals, period.from, period.to, selectedLifecycleStatusId, selectedLifecycleStatusName]);
 
   const leasingSegments = useMemo(() => {
-    const counts = new Map<string, number>();
+    const aggregates = new Map<string, { count: number; sum: number }>();
 
     for (const deal of filteredDeals) {
       const key = deal.leasingCompanyName;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const current = aggregates.get(key) ?? { count: 0, sum: 0 };
+      aggregates.set(key, {
+        count: current.count + 1,
+        sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub),
+      });
     }
 
-    return Array.from(counts.entries())
-      .map(([label, value], index) => ({
+    return Array.from(aggregates.entries())
+      .map(([label, { count, sum }]) => ({
         label,
-        value,
-        color: COLORS[index % COLORS.length]!,
+        count,
+        value: sum,
       }))
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"))
+      .map((item, index) => ({
+        ...item,
+        color: COLORS[index % COLORS.length]!,
+      }));
   }, [filteredDeals]);
 
   const stageSegments = useMemo(() => {
-    const counts = new Map<string, number>();
+    const aggregates = new Map<string, { count: number; sum: number }>();
 
     for (const deal of filteredDeals) {
       const key = deal.dealStageName;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const current = aggregates.get(key) ?? { count: 0, sum: 0 };
+      aggregates.set(key, {
+        count: current.count + 1,
+        sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub),
+      });
     }
 
-    return Array.from(counts.entries())
-      .map(([label, value], index) => ({
+    return Array.from(aggregates.entries())
+      .map(([label, { count, sum }]) => ({
         label,
-        value,
-        color: COLORS[index % COLORS.length]!,
+        count,
+        value: sum,
       }))
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"))
+      .map((item, index) => ({
+        ...item,
+        color: COLORS[index % COLORS.length]!,
+      }));
   }, [filteredDeals]);
 
   const managerCountSegments = useMemo(() => {
@@ -221,6 +236,24 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   const isActiveFilter = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["актив"]);
   const isRealizedFilter = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["реализ"]);
 
+  const hotColdCounts = useMemo(() => {
+    let hot = 0;
+    let cold = 0;
+
+    for (const deal of filteredDeals) {
+      if (includesAny(deal.dealStatusName, ["горяч"])) {
+        hot += 1;
+        continue;
+      }
+
+      if (includesAny(deal.dealStatusName, ["холод"])) {
+        cold += 1;
+      }
+    }
+
+    return { hot, cold };
+  }, [filteredDeals]);
+
   const managerIncomeTitle = isActiveFilter
     ? "Прогноз (АВ, руб.) по менеджерам"
     : isRealizedFilter
@@ -238,6 +271,9 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     () => Math.max(0, ...managerIncomeSegments.map((s) => s.value)),
     [managerIncomeSegments],
   );
+  const stageAvMax = useMemo(() => Math.max(0, ...stageSegments.map((s) => s.value)), [stageSegments]);
+  const leasingAvMax = useMemo(() => Math.max(0, ...leasingSegments.map((s) => s.value)), [leasingSegments]);
+  const totalDealsCount = filteredDeals.length;
 
   return (
     <div className={styles.page}>
@@ -288,7 +324,9 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
             <Card
               title={incomeTitle}
               subtitle={
-                selectedLifecycleStatusName ? `Срез: ${selectedLifecycleStatusName}, ${period.label}` : period.label
+                selectedLifecycleStatusName
+                  ? `Срез: ${selectedLifecycleStatusName}, ${period.label}, сделок: ${totalDealsCount}`
+                  : `${period.label}, сделок: ${totalDealsCount}`
               }
               className={`${styles.card} ${styles.fixedCard}`}
             >
@@ -298,13 +336,31 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                   <div className={styles.loadingText}>Загрузка...</div>
                 </div>
               ) : (
-                <div className={styles.incomeNumber} aria-label="Доход">
-                  {Math.round(totalIncomeRub).toLocaleString("ru-RU")}
+                <div className={styles.incomeBlock}>
+                  <div className={styles.incomeNumber} aria-label="Доход">
+                    {Math.round(totalIncomeRub).toLocaleString("ru-RU")}
+                  </div>
+                  {isActiveFilter && (
+                    <div className={styles.hotColdRow} aria-label="Горячие и холодные сделки">
+                      <div className={styles.hotColdItem}>
+                        <span className={styles.hotColdLabel}>Горячие</span>
+                        <span className={styles.hotColdValue}>{formatNumberLike(hotColdCounts.hot)}</span>
+                      </div>
+                      <div className={styles.hotColdItem}>
+                        <span className={styles.hotColdLabel}>Холодные</span>
+                        <span className={styles.hotColdValue}>{formatNumberLike(hotColdCounts.cold)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
 
-            <Card title="Менеджеры" subtitle="Распределение сделок" className={`${styles.card} ${styles.barCard}`}>
+            <Card
+              title="Менеджеры"
+              subtitle={`Распределение сделок (всего: ${totalDealsCount})`}
+              className={`${styles.card} ${styles.barCard}`}
+            >
               {isLoading ? (
                 <div className={styles.loading}>
                   <Spinner size={24} />
@@ -341,7 +397,11 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
               )}
             </Card>
 
-            <Card title="Менеджеры" subtitle={managerIncomeTitle} className={`${styles.card} ${styles.barCard}`}>
+            <Card
+              title="Менеджеры"
+              subtitle={`${managerIncomeTitle} (всего: ${totalDealsCount})`}
+              className={`${styles.card} ${styles.barCard}`}
+            >
               {isLoading ? (
                 <div className={styles.loading}>
                   <Spinner size={24} />
@@ -382,39 +442,87 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
 
         <div className={styles.rowFull}>
           <div className={styles.rowGridPies} aria-label="Круговые диаграммы">
-            {!isRealizedFilter && (
-              <Card
-                title="Этапы сделки"
-                subtitle="Распределение по этапам"
-                className={`${styles.card} ${styles.pieCard} ${styles.stagePieCard}`}
-              >
-                {isLoading ? (
-                  <div className={styles.loading}>
-                    <Spinner size={24} />
-                    <div className={styles.loadingText}>Загрузка...</div>
-                  </div>
-                ) : (
-                  <PieChart
-                    ariaLabel="Круговая диаграмма по этапам сделки"
-                    segments={stageSegments}
-                    emptyText="Сделок пока нет"
-                  />
-                )}
-              </Card>
-            )}
-
-            <Card title="Лизинговые" subtitle="По лизинговым компаниям" className={`${styles.card} ${styles.pieCard}`}>
+            <Card
+              title="Этапы сделки"
+              subtitle={`АВ по этапам (всего: ${totalDealsCount})`}
+              className={`${styles.card} ${styles.pieCard} ${styles.stagePieCard}`}
+            >
               {isLoading ? (
                 <div className={styles.loading}>
                   <Spinner size={24} />
                   <div className={styles.loadingText}>Загрузка...</div>
                 </div>
               ) : (
-                <PieChart
-                  ariaLabel="Круговая диаграмма по лизинговым компаниям"
-                  segments={leasingSegments}
-                  emptyText="Сделок пока нет"
-                />
+                <div className={styles.barList} aria-label="АВ по этапам сделки">
+                  {stageSegments.length === 0 ? (
+                    <div className={styles.emptyInline}>Сделок пока нет</div>
+                  ) : (
+                    stageSegments.map((item) => (
+                      <div key={item.label} className={styles.barRow}>
+                        <div className={styles.barMeta}>
+                          <span className={styles.barLabel} title={item.label}>
+                            {item.label}
+                          </span>
+                          <span className={styles.barValue}>
+                            {formatNumberLike(Math.round(item.value))} ₽ · {formatNumberLike(item.count)} сделок
+                          </span>
+                        </div>
+                        <div className={styles.barTrack} aria-hidden="true">
+                          <div
+                            className={styles.barFill}
+                            style={{
+                              ["--color" as never]: item.color,
+                              ["--size" as never]: `${stageAvMax > 0 ? Math.round((item.value / stageAvMax) * 100) : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </Card>
+
+            <Card
+              title="Лизинговые"
+              subtitle={`АВ по лизинговым (всего: ${totalDealsCount})`}
+              className={`${styles.card} ${styles.pieCard}`}
+            >
+              {isLoading ? (
+                <div className={styles.loading}>
+                  <Spinner size={24} />
+                  <div className={styles.loadingText}>Загрузка...</div>
+                </div>
+              ) : (
+                <div className={styles.barList} aria-label="АВ по лизинговым компаниям">
+                  {leasingSegments.length === 0 ? (
+                    <div className={styles.emptyInline}>Сделок пока нет</div>
+                  ) : (
+                    leasingSegments.map((item) => (
+                      <div key={item.label} className={styles.barRow}>
+                        <div className={styles.barMeta}>
+                          <span className={styles.barLabel} title={item.label}>
+                            {item.label}
+                          </span>
+                          <span className={styles.barValue}>
+                            {formatNumberLike(Math.round(item.value))} ₽ · {formatNumberLike(item.count)} сделок
+                          </span>
+                        </div>
+                        <div className={styles.barTrack} aria-hidden="true">
+                          <div
+                            className={styles.barFill}
+                            style={{
+                              ["--color" as never]: item.color,
+                              ["--size" as never]: `${
+                                leasingAvMax > 0 ? Math.round((item.value / leasingAvMax) * 100) : 0
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </Card>
           </div>
