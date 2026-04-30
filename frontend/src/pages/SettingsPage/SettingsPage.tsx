@@ -12,11 +12,20 @@ import {
 } from "../../api/usersApi";
 import {
   createOwnerLeasingCompany,
+  deleteOwnerLeasingCompany,
   getOwnerLeasingCompanies,
   setOwnerLeasingCompanyActive,
   updateOwnerLeasingCompany,
   type LeasingCompany,
 } from "../../api/leasingCompaniesApi";
+import {
+  createOwnerCommunicationChannel,
+  deleteOwnerCommunicationChannel,
+  getOwnerCommunicationChannels,
+  setOwnerCommunicationChannelActive,
+  updateOwnerCommunicationChannel,
+  type CommunicationChannel,
+} from "../../api/communicationChannelsApi";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Badge } from "../../components/ui/Badge/Badge";
@@ -149,6 +158,19 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [leasingCompanyUpdateError, setLeasingCompanyUpdateError] = useState<string | null>(null);
   const [deletingLeasingCompanyId, setDeletingLeasingCompanyId] = useState<number | null>(null);
 
+  const [communicationChannels, setCommunicationChannels] = useState<CommunicationChannel[]>([]);
+  const [isCommunicationChannelsLoading, setIsCommunicationChannelsLoading] = useState(false);
+  const [communicationChannelsError, setCommunicationChannelsError] = useState<string | null>(null);
+  const [communicationChannelName, setCommunicationChannelName] = useState("");
+  const [isCommunicationChannelCreating, setIsCommunicationChannelCreating] = useState(false);
+  const [communicationChannelCreateError, setCommunicationChannelCreateError] = useState<string | null>(null);
+  const [communicationEditModalOpen, setCommunicationEditModalOpen] = useState(false);
+  const [communicationEditCandidate, setCommunicationEditCandidate] = useState<CommunicationChannel | null>(null);
+  const [communicationEditName, setCommunicationEditName] = useState("");
+  const [isCommunicationChannelUpdating, setIsCommunicationChannelUpdating] = useState(false);
+  const [communicationChannelUpdateError, setCommunicationChannelUpdateError] = useState<string | null>(null);
+  const [deletingCommunicationChannelId, setDeletingCommunicationChannelId] = useState<number | null>(null);
+
   const formatDateTime = (value: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
@@ -230,6 +252,29 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   useEffect(() => {
     void loadLeasingCompanies();
   }, [loadLeasingCompanies]);
+
+  const loadCommunicationChannels = useCallback(async () => {
+    if (!isOwner) {
+      return;
+    }
+
+    try {
+      setIsCommunicationChannelsLoading(true);
+      setCommunicationChannelsError(null);
+      const loaded = await getOwnerCommunicationChannels();
+      setCommunicationChannels(loaded);
+    } catch (requestError) {
+      setCommunicationChannelsError(
+        getApiErrorMessage(requestError, "Не удалось загрузить каналы связи."),
+      );
+    } finally {
+      setIsCommunicationChannelsLoading(false);
+    }
+  }, [isOwner]);
+
+  useEffect(() => {
+    void loadCommunicationChannels();
+  }, [loadCommunicationChannels]);
 
   const openTempPasswordModal = (params: {
     title: string;
@@ -315,6 +360,122 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
       setLeasingCompaniesError(getApiErrorMessage(requestError, "Не удалось обновить лизинговую компанию."));
     } finally {
       setDeletingLeasingCompanyId(null);
+    }
+  };
+
+  const handleDeleteLeasingCompany = async (company: LeasingCompany) => {
+    const confirmed = window.confirm(`Удалить лизинговую компанию «${company.name}»?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingLeasingCompanyId(company.id);
+      setLeasingCompaniesError(null);
+      await deleteOwnerLeasingCompany(company.id);
+      await loadLeasingCompanies();
+    } catch (requestError) {
+      setLeasingCompaniesError(
+        getApiErrorMessage(
+          requestError,
+          "Не удалось удалить лизинговую компанию. Проверьте, что она не используется в сделках (иначе — архивируйте).",
+        ),
+      );
+    } finally {
+      setDeletingLeasingCompanyId(null);
+    }
+  };
+
+  const handleCreateCommunicationChannel = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!communicationChannelName.trim()) {
+      setCommunicationChannelCreateError("Введите название канала связи.");
+      return;
+    }
+
+    try {
+      setIsCommunicationChannelCreating(true);
+      setCommunicationChannelCreateError(null);
+      await createOwnerCommunicationChannel(communicationChannelName.trim());
+      setCommunicationChannelName("");
+      await loadCommunicationChannels();
+    } catch (requestError) {
+      setCommunicationChannelCreateError(
+        getApiErrorMessage(requestError, "Не удалось добавить канал связи."),
+      );
+    } finally {
+      setIsCommunicationChannelCreating(false);
+    }
+  };
+
+  const openEditCommunicationChannel = (channel: CommunicationChannel) => {
+    setCommunicationChannelUpdateError(null);
+    setCommunicationEditCandidate(channel);
+    setCommunicationEditName(channel.name);
+    setCommunicationEditModalOpen(true);
+  };
+
+  const handleUpdateCommunicationChannel = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!communicationEditCandidate) return;
+
+    if (!communicationEditName.trim()) {
+      setCommunicationChannelUpdateError("Введите название канала связи.");
+      return;
+    }
+
+    try {
+      setIsCommunicationChannelUpdating(true);
+      setCommunicationChannelUpdateError(null);
+      await updateOwnerCommunicationChannel(communicationEditCandidate.id, communicationEditName.trim());
+      setCommunicationEditModalOpen(false);
+      setCommunicationEditCandidate(null);
+      setCommunicationEditName("");
+      await loadCommunicationChannels();
+    } catch (requestError) {
+      setCommunicationChannelUpdateError(
+        getApiErrorMessage(requestError, "Не удалось обновить канал связи."),
+      );
+    } finally {
+      setIsCommunicationChannelUpdating(false);
+    }
+  };
+
+  const handleToggleCommunicationChannelActive = async (channel: CommunicationChannel) => {
+    const action = channel.isActive ? "архивировать" : "восстановить";
+    const confirmed = window.confirm(`Вы уверены, что хотите ${action} «${channel.name}»?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingCommunicationChannelId(channel.id);
+      setCommunicationChannelsError(null);
+      await setOwnerCommunicationChannelActive(channel.id, !channel.isActive);
+      await loadCommunicationChannels();
+    } catch (requestError) {
+      setCommunicationChannelsError(getApiErrorMessage(requestError, "Не удалось обновить канал связи."));
+    } finally {
+      setDeletingCommunicationChannelId(null);
+    }
+  };
+
+  const handleDeleteCommunicationChannel = async (channel: CommunicationChannel) => {
+    const confirmed = window.confirm(`Удалить канал связи «${channel.name}»?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingCommunicationChannelId(channel.id);
+      setCommunicationChannelsError(null);
+      await deleteOwnerCommunicationChannel(channel.id);
+      await loadCommunicationChannels();
+    } catch (requestError) {
+      setCommunicationChannelsError(
+        getApiErrorMessage(
+          requestError,
+          "Не удалось удалить канал связи. Проверьте, что он не используется в компаниях (иначе — архивируйте).",
+        ),
+      );
+    } finally {
+      setDeletingCommunicationChannelId(null);
     }
   };
 
@@ -738,12 +899,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
             </div>
           )}
 
-          {!isLeasingCompaniesLoading && !leasingCompaniesError && (
+          {!isLeasingCompaniesLoading && (
             <DataTable>
               <thead>
                 <Tr>
-                  <Th style={{ width: "10%" }}>ID</Th>
-                  <Th style={{ width: "36%" }}>Название</Th>
+                  <Th style={{ width: "40%" }}>Название</Th>
                   <Th style={{ width: "14%" }}>Статус</Th>
                   <Th style={{ width: "20%" }}>Создано</Th>
                   <Th style={{ width: "20%" }}>Обновлено</Th>
@@ -753,14 +913,13 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               <tbody>
                 {leasingCompanies.length === 0 ? (
                   <Tr>
-                    <Td colSpan={6} style={{ textAlign: "center" }}>
+                    <Td colSpan={5} style={{ textAlign: "center" }}>
                       <span className={styles.emptyText}>Лизинговых компаний пока нет.</span>
                     </Td>
                   </Tr>
                 ) : (
                   leasingCompanies.map((company) => (
                     <Tr key={company.id}>
-                      <Td>{company.id}</Td>
                       <Td>{company.name}</Td>
                       <Td>
                         {company.isActive ? <Badge>Активна</Badge> : <span className={styles.muted}>Архив</span>}
@@ -790,6 +949,19 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                               <Icon name="lock" size={18} />
                             ) : (
                               <Icon name="refresh" size={18} />
+                            )}
+                          </IconButton>
+                          <IconButton
+                            tone="danger"
+                            onClick={() => void handleDeleteLeasingCompany(company)}
+                            disabled={deletingLeasingCompanyId === company.id}
+                            title="Удалить"
+                            aria-label="Удалить"
+                          >
+                            {deletingLeasingCompanyId === company.id ? (
+                              <Spinner size={18} />
+                            ) : (
+                              <Icon name="trash" size={18} />
                             )}
                           </IconButton>
                         </div>
@@ -864,6 +1036,167 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                 </Button>
                 <Button type="submit" disabled={isLeasingCompanyUpdating}>
                   {isLeasingCompanyUpdating ? <Spinner size={20} /> : "Сохранить"}
+                </Button>
+              </div>
+            </form>
+          </Modal>
+        </section>
+      )}
+
+      {isOwner && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Каналы связи</h2>
+
+          {isCommunicationChannelsLoading && (
+            <div className={styles.loadingRow}>
+              <Spinner size={22} />
+              <div>Загрузка каналов...</div>
+            </div>
+          )}
+
+          {communicationChannelsError && (
+            <div className={styles.messages}>
+              <Alert tone="error">{communicationChannelsError}</Alert>
+            </div>
+          )}
+
+          {!isCommunicationChannelsLoading && (
+            <DataTable>
+              <thead>
+                <Tr>
+                  <Th style={{ width: "40%" }}>Название</Th>
+                  <Th style={{ width: "14%" }}>Статус</Th>
+                  <Th style={{ width: "20%" }}>Создано</Th>
+                  <Th style={{ width: "20%" }}>Обновлено</Th>
+                  <Th style={{ width: "10%" }}>Действия</Th>
+                </Tr>
+              </thead>
+              <tbody>
+                {communicationChannels.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={5} style={{ textAlign: "center" }}>
+                      <span className={styles.emptyText}>Каналов связи пока нет.</span>
+                    </Td>
+                  </Tr>
+                ) : (
+                  communicationChannels.map((channel) => (
+                    <Tr key={channel.id}>
+                      <Td>{channel.name}</Td>
+                      <Td>
+                        {channel.isActive ? <Badge>Активен</Badge> : <span className={styles.muted}>Архив</span>}
+                      </Td>
+                      <Td>{formatDateTime(channel.createdAt)}</Td>
+                      <Td>{formatDateTime(channel.updatedAt)}</Td>
+                      <Td>
+                        <div className={styles.leasingActions}>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => openEditCommunicationChannel(channel)}
+                            title="Редактировать"
+                            aria-label="Редактировать"
+                          >
+                            <Icon name="edit" size={18} />
+                          </IconButton>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => void handleToggleCommunicationChannelActive(channel)}
+                            disabled={deletingCommunicationChannelId === channel.id}
+                            title={channel.isActive ? "Архивировать" : "Восстановить"}
+                            aria-label={channel.isActive ? "Архивировать" : "Восстановить"}
+                          >
+                            {deletingCommunicationChannelId === channel.id ? (
+                              <Spinner size={18} />
+                            ) : channel.isActive ? (
+                              <Icon name="lock" size={18} />
+                            ) : (
+                              <Icon name="refresh" size={18} />
+                            )}
+                          </IconButton>
+                          <IconButton
+                            tone="danger"
+                            onClick={() => void handleDeleteCommunicationChannel(channel)}
+                            disabled={deletingCommunicationChannelId === channel.id}
+                            title="Удалить"
+                            aria-label="Удалить"
+                          >
+                            {deletingCommunicationChannelId === channel.id ? (
+                              <Spinner size={18} />
+                            ) : (
+                              <Icon name="trash" size={18} />
+                            )}
+                          </IconButton>
+                        </div>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </tbody>
+            </DataTable>
+          )}
+
+          <Divider />
+
+          <form className={styles.leasingCreateForm} onSubmit={handleCreateCommunicationChannel} noValidate>
+            <div className={styles.leasingCreateRow}>
+              <InputField
+                label="Новый канал"
+                value={communicationChannelName}
+                onChange={(event) => setCommunicationChannelName(event.target.value)}
+                disabled={isCommunicationChannelCreating}
+                placeholder="например: WhatsApp"
+                required
+              />
+              <Button type="submit" disabled={isCommunicationChannelCreating}>
+                {isCommunicationChannelCreating ? <Spinner size={20} /> : "Добавить"}
+              </Button>
+            </div>
+
+            {communicationChannelCreateError && (
+              <div className={styles.messages}>
+                <Alert tone="error">{communicationChannelCreateError}</Alert>
+              </div>
+            )}
+          </form>
+
+          <Modal
+            open={communicationEditModalOpen}
+            title="Редактировать канал связи"
+            onClose={() => {
+              if (isCommunicationChannelUpdating) return;
+              setCommunicationEditModalOpen(false);
+              setCommunicationEditCandidate(null);
+              setCommunicationEditName("");
+              setCommunicationChannelUpdateError(null);
+            }}
+          >
+            <form className={styles.leasingEditForm} onSubmit={handleUpdateCommunicationChannel} noValidate>
+              <InputField
+                label="Название"
+                value={communicationEditName}
+                onChange={(event) => setCommunicationEditName(event.target.value)}
+                disabled={isCommunicationChannelUpdating}
+                required
+              />
+
+              {communicationChannelUpdateError && (
+                <div className={styles.messages}>
+                  <Alert tone="error">{communicationChannelUpdateError}</Alert>
+                </div>
+              )}
+
+              <Divider />
+
+              <div className={styles.actionsRow}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setCommunicationEditModalOpen(false)}
+                  disabled={isCommunicationChannelUpdating}
+                >
+                  Отмена
+                </Button>
+                <Button type="submit" disabled={isCommunicationChannelUpdating}>
+                  {isCommunicationChannelUpdating ? <Spinner size={20} /> : "Сохранить"}
                 </Button>
               </div>
             </form>

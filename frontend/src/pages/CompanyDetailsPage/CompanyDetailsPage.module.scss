@@ -1,0 +1,152 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid rgba(214, 224, 234, 0.8);
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.cardTitle {
+  margin: 0 0 12px;
+  font-size: 1.04rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.kv {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kvRow {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(214, 224, 234, 0.6);
+}
+
+.kvRow:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.kvKey {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.kvValue {
+  color: rgba(28, 37, 38, 0.92);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.grid > .card:nth-child(1) {
+  grid-column: span 4;
+}
+
+.grid > .card:nth-child(2) {
+  grid-column: span 5;
+}
+
+.grid > .card:nth-child(3) {
+  grid-column: span 3;
+}
+
+.editModal {
+  max-width: 920px;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(78vh, 760px);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 1100px) {
+  .grid > .card:nth-child(1),
+  .grid > .card:nth-child(2),
+  .grid > .card:nth-child(3) {
+    grid-column: span 12;
+  }
+
+  .kvRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}

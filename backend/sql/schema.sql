@@ -27,6 +27,19 @@ CREATE TABLE users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE tax_systems (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0)
+);
+
+CREATE TABLE communication_channels (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE companies (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   manager_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -37,6 +50,17 @@ CREATE TABLE companies (
   email TEXT NULL CHECK (email IS NULL OR char_length(trim(email)) > 0),
   comment TEXT NULL CHECK (comment IS NULL OR char_length(trim(comment)) > 0),
   next_contact_at TIMESTAMPTZ NULL,
+  legal_address TEXT NULL CHECK (legal_address IS NULL OR char_length(trim(legal_address)) > 0),
+  actual_address TEXT NULL CHECK (actual_address IS NULL OR char_length(trim(actual_address)) > 0),
+  director_birth_date DATE NULL,
+  activity TEXT NULL CHECK (activity IS NULL OR char_length(trim(activity)) > 0),
+  revenue_rub BIGINT NULL CHECK (revenue_rub IS NULL OR revenue_rub >= 0),
+  negative_info TEXT NULL CHECK (negative_info IS NULL OR char_length(trim(negative_info)) > 0),
+  bik TEXT NULL CHECK (bik IS NULL OR char_length(trim(bik)) > 0),
+  rs TEXT NULL CHECK (rs IS NULL OR char_length(trim(rs)) > 0),
+  ks TEXT NULL CHECK (ks IS NULL OR char_length(trim(ks)) > 0),
+  tax_system_id BIGINT NULL REFERENCES tax_systems(id) ON DELETE RESTRICT,
+  preferred_communication_channel_id BIGINT NULL REFERENCES communication_channels(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -84,6 +108,8 @@ CREATE INDEX idx_users_role_id ON users(role_id);
 CREATE INDEX idx_users_group_lead_user_id ON users(group_lead_user_id);
 CREATE INDEX idx_companies_manager_user_id ON companies(manager_user_id);
 CREATE INDEX idx_companies_created_at ON companies(created_at);
+CREATE INDEX idx_companies_tax_system_id ON companies(tax_system_id);
+CREATE INDEX idx_companies_preferred_communication_channel_id ON companies(preferred_communication_channel_id);
 CREATE INDEX idx_deals_company_id ON deals(company_id);
 CREATE INDEX idx_deals_created_at ON deals(created_at);
 CREATE INDEX idx_deals_deal_status_id ON deals(deal_status_id);
@@ -106,6 +132,11 @@ BEFORE UPDATE ON leasing_companies
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_communication_channels_set_updated_at
+BEFORE UPDATE ON communication_channels
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER trg_deals_set_updated_at
 BEFORE UPDATE ON deals
 FOR EACH ROW
@@ -115,6 +146,19 @@ INSERT INTO roles (name) VALUES
 ('owner'),
 ('manager'),
 ('group_lead')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO tax_systems (name) VALUES
+('ОСН'),
+('УСН 6%'),
+('УСН 15%')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO communication_channels (name) VALUES
+('Телефон'),
+('WhatsApp'),
+('Telegram'),
+('Email')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO deal_statuses (name) VALUES

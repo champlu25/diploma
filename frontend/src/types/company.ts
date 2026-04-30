@@ -13,6 +13,32 @@ export interface Company {
   updatedAt: string;
 }
 
+export interface CompanyRequisites {
+  id: number;
+  name: string;
+  bik: string;
+  rs: string;
+  ks: string;
+}
+
+export interface CompanyDetails extends Company {
+  legalAddress: string | null;
+  actualAddress: string | null;
+  directorBirthDate: string | null;
+  activity: string | null;
+  revenueRub: number | null;
+  negativeInfo: string | null;
+  bik: string | null;
+  rs: string | null;
+  ks: string | null;
+
+  taxSystemId: number | null;
+  taxSystemName: string | null;
+
+  preferredCommunicationChannelId: number | null;
+  preferredCommunicationChannelName: string | null;
+}
+
 export interface CompanyFormValues {
   name: string;
   inn: string;
@@ -21,4 +47,15 @@ export interface CompanyFormValues {
   email: string;
   comment: string;
   nextContactAt: string;
+  legalAddress: string;
+  actualAddress: string;
+  directorBirthDate: string;
+  activity: string;
+  revenueRub: string;
+  negativeInfo: string;
+  bik: string;
+  rs: string;
+  ks: string;
+  taxSystemId: string;
+  preferredCommunicationChannelId: string;
 }

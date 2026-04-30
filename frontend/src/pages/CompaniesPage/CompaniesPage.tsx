@@ -4,12 +4,14 @@ import {
   createCompany,
   deleteCompany,
   getCompanies,
+  getCompanyById,
+  getCompanyLookups,
   transferCompany,
   updateCompany,
 } from "../../api/companiesApi";
 import { createDeal, getDealLookups } from "../../api/dealsApi";
 import { getGroupLeadManagers, getTransferTargets, getUsers } from "../../api/usersApi";
-import type { Company, CompanyFormValues } from "../../types/company";
+import type { Company, CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { DealFormValues, DealLookups } from "../../types/deal";
 import type { AuthUser, User } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
@@ -38,6 +40,17 @@ const emptyForm: CompanyFormValues = {
   email: "",
   comment: "",
   nextContactAt: "",
+  legalAddress: "",
+  actualAddress: "",
+  directorBirthDate: "",
+  activity: "",
+  revenueRub: "",
+  negativeInfo: "",
+  bik: "",
+  rs: "",
+  ks: "",
+  taxSystemId: "",
+  preferredCommunicationChannelId: "",
 };
 
 const validateCompanyForm = (values: CompanyFormValues): CompanyValidationErrors => {
@@ -55,6 +68,18 @@ const validateCompanyForm = (values: CompanyFormValues): CompanyValidationErrors
   const email = values.email.trim();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     errors.email = "Некорректный email";
+  }
+
+  const revenue = values.revenueRub.trim();
+  if (revenue && !/^\d+$/.test(revenue)) {
+    errors.revenueRub = "Выручка: число в рублях";
+  }
+
+  const hasAnyRequisites = Boolean(values.bik.trim() || values.rs.trim() || values.ks.trim());
+  if (hasAnyRequisites && (!values.bik.trim() || !values.rs.trim() || !values.ks.trim())) {
+    errors.bik = "Заполните БИК/РС/КС полностью";
+    errors.rs = "Заполните БИК/РС/КС полностью";
+    errors.ks = "Заполните БИК/РС/КС полностью";
   }
 
   return errors;
@@ -126,6 +151,35 @@ const toDatetimeLocal = (value: string | null): string => {
   const tzOffsetMs = date.getTimezoneOffset() * 60_000;
   const localDate = new Date(date.getTime() - tzOffsetMs);
   return localDate.toISOString().slice(0, 16);
+};
+
+const toDateInputValue = (value: string | null): string => {
+  if (!value) {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.includes("T")) {
+    const prefix = trimmed.slice(0, trimmed.indexOf("T"));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(prefix)) {
+      return prefix;
+    }
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toISOString().slice(0, 10);
 };
 
 const getRussianMonth = (monthIndex: number): string => {
@@ -251,7 +305,17 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [editForm, setEditForm] = useState<CompanyFormValues>(emptyForm);
   const [editErrors, setEditErrors] = useState<CompanyValidationErrors>({});
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [isEditLoading, setIsEditLoading] = useState(false);
   const [isDeleteSubmittingId, setIsDeleteSubmittingId] = useState<number | null>(null);
+
+  const [companyLookups, setCompanyLookups] = useState<{
+    taxSystems: { id: number; name: string }[];
+    communicationChannels: { id: number; name: string }[];
+  } | null>(null);
+  const [communicationChannelOptions, setCommunicationChannelOptions] = useState<SelectFieldOption[]>([
+    { value: "", label: "—" },
+  ]);
+  const [taxSystemOptions, setTaxSystemOptions] = useState<SelectFieldOption[]>([{ value: "", label: "—" }]);
 
   const [creatingDealCompanyId, setCreatingDealCompanyId] = useState<number | null>(null);
   const [dealLookups, setDealLookups] = useState<DealLookups | null>(null);
@@ -286,6 +350,41 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   useEffect(() => {
     void loadCompanies();
   }, [loadCompanies]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadLookups = async () => {
+      try {
+        const lookups = await getCompanyLookups();
+        if (isCancelled) return;
+        setCompanyLookups({
+          taxSystems: lookups.taxSystems.map((t) => ({ id: t.id, name: t.name })),
+          communicationChannels: lookups.communicationChannels.map((c) => ({ id: c.id, name: c.name })),
+        });
+        setCommunicationChannelOptions([
+          { value: "", label: "—" },
+          ...lookups.communicationChannels.map((item) => ({ value: String(item.id), label: item.name })),
+        ]);
+        setTaxSystemOptions([
+          { value: "", label: "—" },
+          ...lookups.taxSystems.map((item) => ({ value: String(item.id), label: item.name })),
+        ]);
+      } catch {
+        if (!isCancelled) {
+          setCompanyLookups({ taxSystems: [], communicationChannels: [] });
+          setCommunicationChannelOptions([{ value: "", label: "—" }]);
+          setTaxSystemOptions([{ value: "", label: "—" }]);
+        }
+      }
+    };
+
+    void loadLookups();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const showManagerFilter = currentUser.role === "owner" || currentUser.role === "group_lead";
 
@@ -398,22 +497,67 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const openEditModal = (company: Company) => {
     setError(null);
     setEditingCompanyId(company.id);
-    setEditForm({
-      name: company.name,
-      inn: company.inn,
-      contactName: company.contactName ?? "",
-      phone: company.phone ?? "",
-      email: company.email ?? "",
-      comment: company.comment ?? "",
-      nextContactAt: toDatetimeLocal(company.nextContactAt),
-    });
+    setIsEditLoading(true);
     setEditErrors({});
+
+    void (async () => {
+      try {
+        const [lookups, details] = await Promise.all([
+          companyLookups ? Promise.resolve(companyLookups) : getCompanyLookups(),
+          getCompanyById(company.id),
+        ]);
+
+        if (!companyLookups) {
+          setCompanyLookups({
+            taxSystems: lookups.taxSystems.map((t) => ({ id: t.id, name: t.name })),
+            communicationChannels: lookups.communicationChannels.map((c) => ({ id: c.id, name: c.name })),
+          });
+          setCommunicationChannelOptions([
+            { value: "", label: "—" },
+            ...lookups.communicationChannels.map((item) => ({ value: String(item.id), label: item.name })),
+          ]);
+          setTaxSystemOptions([
+            { value: "", label: "—" },
+            ...lookups.taxSystems.map((item) => ({ value: String(item.id), label: item.name })),
+          ]);
+        }
+
+        const companyDetails: CompanyDetails = details;
+
+        setEditForm({
+          name: companyDetails.name,
+          inn: companyDetails.inn,
+          contactName: companyDetails.contactName ?? "",
+          phone: companyDetails.phone ?? "",
+          email: companyDetails.email ?? "",
+          comment: companyDetails.comment ?? "",
+          nextContactAt: toDatetimeLocal(companyDetails.nextContactAt),
+          legalAddress: companyDetails.legalAddress ?? "",
+          actualAddress: companyDetails.actualAddress ?? "",
+          directorBirthDate: toDateInputValue(companyDetails.directorBirthDate),
+          activity: companyDetails.activity ?? "",
+          revenueRub: companyDetails.revenueRub === null ? "" : String(companyDetails.revenueRub),
+          negativeInfo: companyDetails.negativeInfo ?? "",
+          bik: companyDetails.bik ?? "",
+          rs: companyDetails.rs ?? "",
+          ks: companyDetails.ks ?? "",
+          taxSystemId: companyDetails.taxSystemId === null ? "" : String(companyDetails.taxSystemId),
+          preferredCommunicationChannelId:
+            companyDetails.preferredCommunicationChannelId === null ? "" : String(companyDetails.preferredCommunicationChannelId),
+        });
+      } catch (requestError) {
+        setError(getApiErrorMessage(requestError, "Не удалось загрузить данные компании."));
+      } finally {
+        setIsEditLoading(false);
+      }
+    })();
   };
 
   const closeEditModal = () => {
     setEditingCompanyId(null);
     setEditForm(emptyForm);
     setEditErrors({});
+    setIsEditLoading(false);
   };
 
   const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -712,7 +856,14 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               return (
                 <Tr key={company.id}>
                   <Td>
-                    {company.name}
+                    <button
+                      type="button"
+                      className={styles.companyLink}
+                      onClick={() => navigate(`/companies/${company.id}`)}
+                      title="Открыть карточку компании"
+                    >
+                      {company.name}
+                    </button>
                   </Td>
 
                   {showManagerColumn && <Td>{company.managerName}</Td>}
@@ -889,6 +1040,95 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             disabled={isCreateSubmitting}
           />
 
+          <InputField
+            label="Юридический адрес"
+            value={createForm.legalAddress}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, legalAddress: event.target.value }))}
+            disabled={isCreateSubmitting}
+          />
+
+          <InputField
+            label="Фактический адрес"
+            value={createForm.actualAddress}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, actualAddress: event.target.value }))}
+            disabled={isCreateSubmitting}
+          />
+
+          <InputField
+            label="День рождения директора"
+            type="date"
+            value={createForm.directorBirthDate}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))}
+            disabled={isCreateSubmitting}
+          />
+
+          <TextAreaField
+            label="Вид деятельности"
+            value={createForm.activity}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, activity: event.target.value }))}
+            disabled={isCreateSubmitting}
+            rows={3}
+          />
+
+          <InputField
+            label="Выручка, ₽"
+            value={createForm.revenueRub}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, revenueRub: event.target.value }))}
+            disabled={isCreateSubmitting}
+            error={createErrors.revenueRub}
+            inputMode="numeric"
+          />
+
+          <TextAreaField
+            label="Выявленный негатив"
+            value={createForm.negativeInfo}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, negativeInfo: event.target.value }))}
+            disabled={isCreateSubmitting}
+            rows={3}
+          />
+
+          <SelectField
+            label="Предпочитает общение через"
+            value={createForm.preferredCommunicationChannelId}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, preferredCommunicationChannelId: event.target.value }))
+            }
+            options={communicationChannelOptions}
+            disabled={isCreateSubmitting}
+          />
+
+          <SelectField
+            label="Система налогообложения"
+            value={createForm.taxSystemId}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, taxSystemId: event.target.value }))}
+            options={taxSystemOptions}
+            disabled={isCreateSubmitting}
+          />
+
+          <InputField
+            label="БИК"
+            value={createForm.bik}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, bik: event.target.value }))}
+            disabled={isCreateSubmitting}
+            error={createErrors.bik}
+          />
+
+          <InputField
+            label="Р/С"
+            value={createForm.rs}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, rs: event.target.value }))}
+            disabled={isCreateSubmitting}
+            error={createErrors.rs}
+          />
+
+          <InputField
+            label="К/С"
+            value={createForm.ks}
+            onChange={(event) => setCreateForm((prev) => ({ ...prev, ks: event.target.value }))}
+            disabled={isCreateSubmitting}
+            error={createErrors.ks}
+          />
+
           <TextAreaField
             label="Комментарий"
             value={createForm.comment}
@@ -913,7 +1153,13 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           closeEditModal();
         }}
       >
-        {editingCompany && (
+        {editingCompany && isEditLoading && (
+          <div className={styles.loadingBlock}>
+            <Spinner size={26} />
+          </div>
+        )}
+
+        {editingCompany && !isEditLoading && (
           <form className={styles.modalForm} onSubmit={handleEditSubmit}>
             <InputField
               label="Наименование"
@@ -962,6 +1208,95 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               value={editForm.nextContactAt}
               onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
               disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="Юридический адрес"
+              value={editForm.legalAddress}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, legalAddress: event.target.value }))}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="Фактический адрес"
+              value={editForm.actualAddress}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, actualAddress: event.target.value }))}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="День рождения директора"
+              type="date"
+              value={editForm.directorBirthDate}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))}
+              disabled={isEditSubmitting}
+            />
+
+            <TextAreaField
+              label="Вид деятельности"
+              value={editForm.activity}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, activity: event.target.value }))}
+              disabled={isEditSubmitting}
+              rows={3}
+            />
+
+            <InputField
+              label="Выручка, ₽"
+              value={editForm.revenueRub}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, revenueRub: event.target.value }))}
+              disabled={isEditSubmitting}
+              error={editErrors.revenueRub}
+              inputMode="numeric"
+            />
+
+            <TextAreaField
+              label="Выявленный негатив"
+              value={editForm.negativeInfo}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, negativeInfo: event.target.value }))}
+              disabled={isEditSubmitting}
+              rows={3}
+            />
+
+            <SelectField
+              label="Предпочитает общение через"
+              value={editForm.preferredCommunicationChannelId}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, preferredCommunicationChannelId: event.target.value }))
+              }
+              options={communicationChannelOptions}
+              disabled={isEditSubmitting}
+            />
+
+            <SelectField
+              label="Система налогообложения"
+              value={editForm.taxSystemId}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, taxSystemId: event.target.value }))}
+              options={taxSystemOptions}
+              disabled={isEditSubmitting}
+            />
+
+            <InputField
+              label="БИК"
+              value={editForm.bik}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, bik: event.target.value }))}
+              disabled={isEditSubmitting}
+              error={editErrors.bik}
+            />
+
+            <InputField
+              label="Р/С"
+              value={editForm.rs}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, rs: event.target.value }))}
+              disabled={isEditSubmitting}
+              error={editErrors.rs}
+            />
+
+            <InputField
+              label="К/С"
+              value={editForm.ks}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, ks: event.target.value }))}
+              disabled={isEditSubmitting}
+              error={editErrors.ks}
             />
 
             <TextAreaField

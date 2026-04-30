@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { getCurrentUser, logout } from "../api/authApi";
 import { AppShell } from "../components/AppShell/AppShell";
+import { CompanyDetailsPage } from "../pages/CompanyDetailsPage/CompanyDetailsPage";
 import { CompaniesPage } from "../pages/CompaniesPage/CompaniesPage";
 import { DashboardsPage } from "../pages/DashboardsPage/DashboardsPage";
 import { DealsPage } from "../pages/DealsPage/DealsPage";
@@ -128,6 +129,16 @@ function App() {
                 <Navigate to="/" replace />
               ) : (
                 <CompaniesPage currentUser={currentUser!} />
+              )
+            }
+          />
+          <Route
+            path="companies/:companyId"
+            element={
+              currentUser?.mustChangePassword ? (
+                <Navigate to="/" replace />
+              ) : (
+                <CompanyDetailsPage currentUser={currentUser!} />
               )
             }
           />

@@ -206,6 +206,10 @@ const seedTestData = async (client) => {
     `SELECT id, name FROM leasing_companies WHERE is_active = TRUE ORDER BY id ASC`,
   );
   const dealStagesResult = await client.query(`SELECT id, name FROM deal_stages ORDER BY id ASC`);
+  const taxSystemsResult = await client.query(`SELECT id, name FROM tax_systems ORDER BY id ASC`);
+  const communicationChannelsResult = await client.query(
+    `SELECT id, name FROM communication_channels WHERE is_active = TRUE ORDER BY id ASC`,
+  );
 
   const statusByName = new Map(dealStatusesResult.rows.map((row) => [row.name, row.id]));
   const lifecycleByName = new Map(dealLifecyclesResult.rows.map((row) => [row.name, row.id]));
@@ -229,9 +233,17 @@ const seedTestData = async (client) => {
   if (dealStagesResult.rowCount === 0) {
     throw new Error("Не найдены этапы сделки в deal_stages.");
   }
+  if (taxSystemsResult.rowCount === 0) {
+    throw new Error("Не найдены системы налогообложения в tax_systems.");
+  }
+  if (communicationChannelsResult.rowCount === 0) {
+    throw new Error("Не найдены каналы связи в communication_channels.");
+  }
 
   const leasingCompanyIds = leasingCompaniesResult.rows.map((row) => row.id);
   const stageIds = dealStagesResult.rows.map((row) => row.id);
+  const taxSystemIds = taxSystemsResult.rows.map((row) => row.id);
+  const communicationChannelIds = communicationChannelsResult.rows.map((row) => row.id);
 
   // Seed more data so dashboards have something to plot.
   // Keep users as-is (4 accounts), but create more companies and deals.
@@ -260,6 +272,28 @@ const seedTestData = async (client) => {
   ];
   const contactFirstNames = ["Иван", "Пётр", "Сергей", "Алексей", "Андрей", "Виктор", "Николай", "Дмитрий"];
   const contactLastNames = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Васильев", "Попов", "Новиков"];
+  const cityPool = ["Москва", "Санкт-Петербург", "Нижний Новгород", "Саратов", "Казань"];
+  const streetPool = ["Транспортная", "Складская", "Лесная", "Промышленная", "Центральная"];
+  const activityPool = [
+    "Грузовые перевозки и логистические услуги",
+    "Строительные работы",
+    "Оптовая торговля",
+    "Аренда спецтехники",
+    "Производство",
+  ];
+  const negativePool = [
+    null,
+    "Не указано",
+    "Была просрочка по платежам (уточняется)",
+    "Имеются замечания по документам",
+  ];
+
+  const randomDateOnly = (fromYear, toYear) => {
+    const year = randomInt(rng, fromYear, toYear);
+    const month = randomInt(rng, 1, 12);
+    const day = randomInt(rng, 1, 28);
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  };
 
   const companyCount = 24;
   for (let i = 0; i < companyCount; i += 1) {
@@ -273,6 +307,12 @@ const seedTestData = async (client) => {
 
     const firstName = pick(rng, contactFirstNames);
     const lastName = pick(rng, contactLastNames);
+    const cityLegal = pick(rng, cityPool);
+    const streetLegal = pick(rng, streetPool);
+    const buildingLegal = randomInt(rng, 1, 45);
+    const cityActual = pick(rng, cityPool);
+    const streetActual = pick(rng, streetPool);
+    const buildingActual = randomInt(rng, 1, 45);
 
     companies.push({
       managerUserId,
@@ -282,6 +322,17 @@ const seedTestData = async (client) => {
       phone: `+7999000${String(1000 + i).slice(-4)}`,
       email: `c${inn}@example.test`,
       comment: i % 3 === 0 ? "Тестовые данные" : null,
+      legalAddress: `г. ${cityLegal}, ул. ${streetLegal}, ${buildingLegal}`,
+      actualAddress: `г. ${cityActual}, ул. ${streetActual}, ${buildingActual}`,
+      directorBirthDate: rng() < 0.8 ? randomDateOnly(1965, 1995) : null,
+      activity: rng() < 0.9 ? pick(rng, activityPool) : null,
+      revenueRub: rng() < 0.8 ? randomInt(rng, 5_000_000, 900_000_000) : null,
+      negativeInfo: pick(rng, negativePool),
+      bik: "044525225",
+      rs: `4070281040001000${String(9000 + i).padStart(4, "0")}`,
+      ks: "30101810400000000225",
+      taxSystemId: pick(rng, taxSystemIds),
+      preferredCommunicationChannelId: rng() < 0.85 ? pick(rng, communicationChannelIds) : null,
     });
   }
 
@@ -301,10 +352,26 @@ const seedTestData = async (client) => {
           email,
           comment,
           next_contact_at,
+          legal_address,
+          actual_address,
+          director_birth_date,
+          activity,
+          revenue_rub,
+          negative_info,
+          bik,
+          rs,
+          ks,
+          tax_system_id,
+          preferred_communication_channel_id,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, ${nextContactAtSql ? nextContactAtSql : "NULL"}, NOW(), NOW())
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          ${nextContactAtSql ? nextContactAtSql : "NULL"},
+          $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+          NOW(), NOW()
+        )
         RETURNING id, name, inn, manager_user_id
       `,
       [
@@ -315,6 +382,17 @@ const seedTestData = async (client) => {
         company.phone,
         company.email,
         company.comment,
+        company.legalAddress,
+        company.actualAddress,
+        company.directorBirthDate,
+        company.activity,
+        company.revenueRub,
+        company.negativeInfo,
+        company.bik,
+        company.rs,
+        company.ks,
+        company.taxSystemId,
+        company.preferredCommunicationChannelId,
       ],
     );
     createdCompanies.push(result.rows[0]);

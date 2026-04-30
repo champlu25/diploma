@@ -152,6 +152,62 @@ const normalizeOptionalTimestamp = (value) => {
   return parsed;
 };
 
+const normalizeOptionalDate = (value) => {
+  if (value === null || typeof value === "undefined") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const raw = value.trim();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.includes("T") ? raw.slice(0, raw.indexOf("T")) : raw;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    // As a fallback, try parsing any ISO-like date/time string and keep only date part.
+    const parsedFallback = new Date(raw);
+    if (Number.isNaN(parsedFallback.getTime())) {
+      return Number.NaN;
+    }
+
+    const iso = parsedFallback.toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      return Number.NaN;
+    }
+
+    return iso;
+  }
+
+  const parsed = new Date(`${normalized}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return Number.NaN;
+  }
+
+  return normalized;
+};
+
+const normalizeOptionalId = (value) => {
+  if (value === null || typeof value === "undefined") {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    return parseUserId(trimmed);
+  }
+
+  return parseUserId(value);
+};
+
 const isInnValid = (inn) => /^\d{10}(\d{2})?$/.test(inn);
 
 const isEmailValid = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -661,6 +717,131 @@ app.get("/api/companies", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/companies/lookups", requireAuth, async (_req, res) => {
+  try {
+    const [taxSystemsResult, channelsResult] = await Promise.all([
+      pool.query(
+        `
+          SELECT id, name
+          FROM tax_systems
+          ORDER BY id ASC
+        `
+      ),
+      pool.query(
+        `
+          SELECT id, name, is_active AS "isActive"
+          FROM communication_channels
+          WHERE is_active = TRUE
+          ORDER BY id ASC
+        `
+      ),
+    ]);
+
+    res.status(200).json({
+      taxSystems: taxSystemsResult.rows,
+      communicationChannels: channelsResult.rows,
+    });
+  } catch (error) {
+    console.error("Не удалось получить справочники компаний:", error);
+    res.status(500).json({
+      message: "Не удалось получить справочники компаний.",
+    });
+  }
+});
+
+app.get("/api/companies/:companyId", requireAuth, async (req, res) => {
+  const companyId = parseUserId(req.params?.companyId);
+  const currentUserId = Number(req.auth.sub);
+
+  if (!companyId) {
+    res.status(400).json({
+      message: "Некорректный companyId.",
+    });
+    return;
+  }
+
+  try {
+    let params = [currentUserId, companyId];
+    let whereSql = "WHERE c.id = $2 AND c.manager_user_id = $1";
+
+    if (req.auth.role === "owner") {
+      params = [companyId];
+      whereSql = "WHERE c.id = $1";
+    } else if (req.auth.role === "group_lead") {
+      whereSql = `
+        WHERE c.id = $2
+          AND (
+            c.manager_user_id = $1
+            OR c.manager_user_id IN (
+              SELECT u.id
+              FROM users AS u
+              JOIN roles AS r ON r.id = u.role_id
+              WHERE u.group_lead_user_id = $1
+                AND r.name = 'manager'
+            )
+          )
+      `;
+    }
+
+    const result = await pool.query(
+      `
+        SELECT
+          c.id,
+          c.manager_user_id,
+          COALESCE(
+            NULLIF(trim(concat_ws(' ', u.last_name, u.first_name, u.middle_name)), ''),
+            u.username
+          ) AS manager_name,
+          c.name,
+          c.inn,
+          c.contact_name,
+          c.phone,
+          c.email,
+          c.comment,
+          c.next_contact_at,
+          c.legal_address,
+          c.actual_address,
+          c.director_birth_date,
+          c.activity,
+          c.revenue_rub,
+          c.negative_info,
+          c.bik,
+          c.rs,
+          c.ks,
+          c.tax_system_id,
+          ts.name AS tax_system_name,
+          c.preferred_communication_channel_id,
+          cc.name AS preferred_communication_channel_name,
+          c.created_at,
+          c.updated_at
+        FROM companies AS c
+        JOIN users AS u ON u.id = c.manager_user_id
+        LEFT JOIN tax_systems AS ts ON ts.id = c.tax_system_id
+        LEFT JOIN communication_channels AS cc ON cc.id = c.preferred_communication_channel_id
+        ${whereSql}
+        LIMIT 1
+      `,
+      params
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        message: "Компания не найдена.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      company: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Не удалось получить компанию:", error);
+    res.status(500).json({
+      message: "Не удалось получить компанию.",
+    });
+  }
+});
+
 app.get("/api/users/transfer-targets", requireAuth, async (req, res) => {
   if (req.auth.role !== "owner" && req.auth.role !== "group_lead") {
     res.status(403).json({
@@ -892,6 +1073,20 @@ app.post("/api/companies", requireAuth, async (req, res) => {
   const email = normalizeOptionalEmail(req.body?.email);
   const comment = normalizeOptionalText(req.body?.comment);
   const nextContactAt = normalizeOptionalTimestamp(req.body?.nextContactAt);
+  const legalAddress = normalizeOptionalText(req.body?.legalAddress);
+  const actualAddress = normalizeOptionalText(req.body?.actualAddress);
+  const directorBirthDate = normalizeOptionalDate(req.body?.directorBirthDate);
+  const activity = normalizeOptionalText(req.body?.activity);
+  const negativeInfo = normalizeOptionalText(req.body?.negativeInfo);
+  const preferredCommunicationChannelId = normalizeOptionalId(req.body?.preferredCommunicationChannelId);
+  const taxSystemIdInput = normalizeOptionalId(req.body?.taxSystemId);
+  const bik = normalizeOptionalText(req.body?.bik);
+  const rs = normalizeOptionalText(req.body?.rs);
+  const ks = normalizeOptionalText(req.body?.ks);
+  const revenueRub =
+    Object.prototype.hasOwnProperty.call(req.body ?? {}, "revenueRub")
+      ? normalizeRequiredNonNegativeInteger(req.body?.revenueRub)
+      : null;
 
   if (!name) {
     res.status(400).json({
@@ -921,7 +1116,70 @@ app.post("/api/companies", requireAuth, async (req, res) => {
     return;
   }
 
+  if (Number.isNaN(directorBirthDate)) {
+    res.status(400).json({
+      message: "Некорректная дата рождения директора.",
+    });
+    return;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(req.body ?? {}, "preferredCommunicationChannelId") &&
+    req.body?.preferredCommunicationChannelId !== null &&
+    typeof req.body?.preferredCommunicationChannelId !== "undefined" &&
+    typeof req.body?.preferredCommunicationChannelId !== "string" &&
+    typeof req.body?.preferredCommunicationChannelId !== "number"
+  ) {
+    res.status(400).json({
+      message: "Некорректный preferredCommunicationChannelId.",
+    });
+    return;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(req.body ?? {}, "preferredCommunicationChannelId") &&
+    req.body?.preferredCommunicationChannelId &&
+    !preferredCommunicationChannelId
+  ) {
+    res.status(400).json({
+      message: "Некорректный preferredCommunicationChannelId.",
+    });
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "revenueRub") && req.body?.revenueRub && revenueRub === null) {
+    res.status(400).json({
+      message: "Некорректная выручка.",
+    });
+    return;
+  }
+
+  const hasAnyRequisites = Boolean(bik || rs || ks);
+  if (hasAnyRequisites && (!bik || !rs || !ks)) {
+    res.status(400).json({
+      message: "Реквизиты должны быть заполнены полностью (БИК, Р/С, К/С) или не заполнены вовсе.",
+    });
+    return;
+  }
+
   try {
+    const taxSystemResult = await pool.query(
+      `SELECT id FROM tax_systems ORDER BY id ASC LIMIT 1`
+    );
+
+    const fallbackTaxSystemId = taxSystemResult.rows[0]?.id ?? null;
+    const taxSystemId = taxSystemIdInput ?? fallbackTaxSystemId;
+
+    if (taxSystemId) {
+      const existsResult = await pool.query(`SELECT 1 FROM tax_systems WHERE id = $1 LIMIT 1`, [taxSystemId]);
+      if (existsResult.rowCount === 0) {
+        res.status(400).json({
+          message: "Некорректная система налогообложения.",
+        });
+        return;
+      }
+    }
+
     const result = await pool.query(
       `
         INSERT INTO companies (
@@ -932,9 +1190,20 @@ app.post("/api/companies", requireAuth, async (req, res) => {
           phone,
           email,
           comment,
-          next_contact_at
+          next_contact_at,
+          legal_address,
+          actual_address,
+          director_birth_date,
+          activity,
+          revenue_rub,
+          negative_info,
+          bik,
+          rs,
+          ks,
+          tax_system_id,
+          preferred_communication_channel_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING
           id,
           manager_user_id,
@@ -954,6 +1223,17 @@ app.post("/api/companies", requireAuth, async (req, res) => {
           email,
           comment,
           next_contact_at,
+          legal_address,
+          actual_address,
+          director_birth_date,
+          activity,
+          revenue_rub,
+          negative_info,
+          bik,
+          rs,
+          ks,
+          tax_system_id,
+          preferred_communication_channel_id,
           created_at,
           updated_at
       `,
@@ -966,6 +1246,17 @@ app.post("/api/companies", requireAuth, async (req, res) => {
         email,
         comment,
         nextContactAt,
+        legalAddress,
+        actualAddress,
+        directorBirthDate,
+        activity,
+        revenueRub,
+        negativeInfo,
+        bik,
+        rs,
+        ks,
+        taxSystemId,
+        preferredCommunicationChannelId,
       ]
     );
 
@@ -1057,6 +1348,84 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
     fieldsToUpdate.next_contact_at = nextContactAt;
   }
 
+  if (Object.prototype.hasOwnProperty.call(req.body, "legalAddress")) {
+    fieldsToUpdate.legal_address = normalizeOptionalText(req.body?.legalAddress);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "actualAddress")) {
+    fieldsToUpdate.actual_address = normalizeOptionalText(req.body?.actualAddress);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "directorBirthDate")) {
+    const directorBirthDate = normalizeOptionalDate(req.body?.directorBirthDate);
+    if (Number.isNaN(directorBirthDate)) {
+      res.status(400).json({
+        message: "Некорректная дата рождения директора.",
+      });
+      return;
+    }
+
+    fieldsToUpdate.director_birth_date = directorBirthDate;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "activity")) {
+    fieldsToUpdate.activity = normalizeOptionalText(req.body?.activity);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "negativeInfo")) {
+    fieldsToUpdate.negative_info = normalizeOptionalText(req.body?.negativeInfo);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "revenueRub")) {
+    const raw = req.body?.revenueRub;
+    const revenueRub = normalizeRequiredNonNegativeInteger(raw);
+
+    if (raw && revenueRub === null) {
+      res.status(400).json({
+        message: "Некорректная выручка.",
+      });
+      return;
+    }
+
+    fieldsToUpdate.revenue_rub = revenueRub;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "preferredCommunicationChannelId")) {
+    const raw = req.body?.preferredCommunicationChannelId;
+    const preferredCommunicationChannelId = normalizeOptionalId(raw);
+
+    if (raw && !preferredCommunicationChannelId) {
+      res.status(400).json({
+        message: "Некорректный preferredCommunicationChannelId.",
+      });
+      return;
+    }
+
+    fieldsToUpdate.preferred_communication_channel_id = preferredCommunicationChannelId;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, "taxSystemId")) {
+    const raw = req.body?.taxSystemId;
+    const taxSystemId = normalizeOptionalId(raw);
+
+    if (raw && !taxSystemId) {
+      res.status(400).json({
+        message: "Некорректная система налогообложения.",
+      });
+      return;
+    }
+
+    fieldsToUpdate.tax_system_id = taxSystemId;
+  }
+
+  const bik = Object.prototype.hasOwnProperty.call(req.body, "bik") ? normalizeOptionalText(req.body?.bik) : undefined;
+  const rs = Object.prototype.hasOwnProperty.call(req.body, "rs") ? normalizeOptionalText(req.body?.rs) : undefined;
+  const ks = Object.prototype.hasOwnProperty.call(req.body, "ks") ? normalizeOptionalText(req.body?.ks) : undefined;
+
+  if (typeof bik !== "undefined") fieldsToUpdate.bik = bik;
+  if (typeof rs !== "undefined") fieldsToUpdate.rs = rs;
+  if (typeof ks !== "undefined") fieldsToUpdate.ks = ks;
+
   const updateKeys = Object.keys(fieldsToUpdate);
   if (updateKeys.length === 0) {
     res.status(400).json({
@@ -1071,6 +1440,9 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
         SELECT
           c.id,
           c.manager_user_id,
+          c.bik,
+          c.rs,
+          c.ks,
           CASE
             WHEN $2 = 'owner' THEN TRUE
             WHEN c.manager_user_id = $1 THEN TRUE
@@ -1106,6 +1478,33 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
       return;
     }
 
+    const nextBik = Object.prototype.hasOwnProperty.call(fieldsToUpdate, "bik") ? fieldsToUpdate.bik : company.bik;
+    const nextRs = Object.prototype.hasOwnProperty.call(fieldsToUpdate, "rs") ? fieldsToUpdate.rs : company.rs;
+    const nextKs = Object.prototype.hasOwnProperty.call(fieldsToUpdate, "ks") ? fieldsToUpdate.ks : company.ks;
+
+    const hasAnyRequisites = Boolean(nextBik || nextRs || nextKs);
+    const hasAllRequisites = Boolean(nextBik && nextRs && nextKs);
+
+    if (hasAnyRequisites && !hasAllRequisites) {
+      res.status(400).json({
+        message: "Реквизиты должны быть заполнены полностью (БИК, Р/С, К/С) или не заполнены вовсе.",
+      });
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(fieldsToUpdate, "tax_system_id")) {
+      const taxSystemId = fieldsToUpdate.tax_system_id;
+      if (taxSystemId) {
+        const existsResult = await pool.query(`SELECT 1 FROM tax_systems WHERE id = $1 LIMIT 1`, [taxSystemId]);
+        if (existsResult.rowCount === 0) {
+          res.status(400).json({
+            message: "Некорректная система налогообложения.",
+          });
+          return;
+        }
+      }
+    }
+
     const values = [];
     const assignments = updateKeys.map((key, index) => {
       values.push(fieldsToUpdate[key]);
@@ -1137,6 +1536,17 @@ app.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
           email,
           comment,
           next_contact_at,
+          legal_address,
+          actual_address,
+          director_birth_date,
+          activity,
+          revenue_rub,
+          negative_info,
+          bik,
+          rs,
+          ks,
+          tax_system_id,
+          preferred_communication_channel_id,
           created_at,
           updated_at
       `,
@@ -2624,7 +3034,8 @@ app.delete("/api/owner/leasing-companies/:leasingCompanyId", requireOwner, async
   } catch (error) {
     if (error?.code === "23503") {
       res.status(409).json({
-        message: "Нельзя удалить: лизинговая компания используется в сделках.",
+        message:
+          "Нельзя удалить: лизинговая компания используется в сделках. Архивируйте её или удалите/измените связанные сделки.",
       });
       return;
     }
@@ -2632,6 +3043,250 @@ app.delete("/api/owner/leasing-companies/:leasingCompanyId", requireOwner, async
     console.error("Не удалось удалить лизинговую компанию:", error);
     res.status(500).json({
       message: "Не удалось удалить лизинговую компанию.",
+    });
+  }
+});
+
+app.get("/api/owner/communication-channels", requireOwner, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          name,
+          is_active AS "isActive",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM communication_channels
+        ORDER BY is_active DESC, id ASC
+      `
+    );
+
+    res.status(200).json({
+      communicationChannels: result.rows,
+    });
+  } catch (error) {
+    console.error("Не удалось получить каналы связи:", error);
+    res.status(500).json({
+      message: "Не удалось получить каналы связи.",
+    });
+  }
+});
+
+app.post("/api/owner/communication-channels", requireOwner, async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+
+  if (!name) {
+    res.status(400).json({
+      message: "Поле name обязательно.",
+    });
+    return;
+  }
+
+  if (name.length > 160) {
+    res.status(400).json({
+      message: "Название слишком длинное.",
+    });
+    return;
+  }
+
+  try {
+    const duplicateResult = await pool.query(
+      `
+        SELECT 1
+        FROM communication_channels
+        WHERE LOWER(name) = LOWER($1)
+        LIMIT 1
+      `,
+      [name]
+    );
+
+    if (duplicateResult.rowCount > 0) {
+      res.status(409).json({
+        message: "Такой канал связи уже существует.",
+      });
+      return;
+    }
+
+    const createdResult = await pool.query(
+      `
+        INSERT INTO communication_channels (name, is_active)
+        VALUES ($1, TRUE)
+        RETURNING
+          id,
+          name,
+          is_active AS "isActive",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+      `,
+      [name]
+    );
+
+    res.status(201).json({
+      communicationChannel: createdResult.rows[0],
+    });
+  } catch (error) {
+    console.error("Не удалось создать канал связи:", error);
+    res.status(500).json({
+      message: "Не удалось создать канал связи.",
+    });
+  }
+});
+
+app.patch("/api/owner/communication-channels/:channelId", requireOwner, async (req, res) => {
+  const channelId = parseUserId(req.params?.channelId);
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : null;
+  const isActive = typeof req.body?.isActive === "boolean" ? req.body.isActive : null;
+
+  if (!channelId) {
+    res.status(400).json({
+      message: "Некорректный channelId.",
+    });
+    return;
+  }
+
+  if (name === null && isActive === null) {
+    res.status(400).json({
+      message: "Нечего обновлять.",
+    });
+    return;
+  }
+
+  if (name !== null) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      res.status(400).json({
+        message: "Поле name обязательно.",
+      });
+      return;
+    }
+
+    if (trimmed.length > 160) {
+      res.status(400).json({
+        message: "Название слишком длинное.",
+      });
+      return;
+    }
+  }
+
+  try {
+    const nextName = name === null ? null : name.trim();
+
+    if (nextName !== null) {
+      const duplicateResult = await pool.query(
+        `
+          SELECT 1
+          FROM communication_channels
+          WHERE LOWER(name) = LOWER($1)
+            AND id <> $2
+          LIMIT 1
+        `,
+        [nextName, channelId]
+      );
+
+      if (duplicateResult.rowCount > 0) {
+        res.status(409).json({
+          message: "Такой канал связи уже существует.",
+        });
+        return;
+      }
+    }
+
+    const updatedResult = await pool.query(
+      `
+        UPDATE communication_channels
+        SET
+          name = COALESCE($1, name),
+          is_active = COALESCE($2, is_active),
+          updated_at = NOW()
+        WHERE id = $3
+        RETURNING
+          id,
+          name,
+          is_active AS "isActive",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+      `,
+      [nextName, isActive, channelId]
+    );
+
+    if (updatedResult.rowCount === 0) {
+      res.status(404).json({
+        message: "Канал связи не найден.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      communicationChannel: updatedResult.rows[0],
+    });
+  } catch (error) {
+    console.error("Не удалось обновить канал связи:", error);
+    res.status(500).json({
+      message: "Не удалось обновить канал связи.",
+    });
+  }
+});
+
+app.delete("/api/owner/communication-channels/:channelId", requireOwner, async (req, res) => {
+  const channelId = parseUserId(req.params?.channelId);
+
+  if (!channelId) {
+    res.status(400).json({
+      message: "Некорректный channelId.",
+    });
+    return;
+  }
+
+  try {
+    const usageResult = await pool.query(
+      `
+        SELECT 1
+        FROM companies
+        WHERE preferred_communication_channel_id = $1
+        LIMIT 1
+      `,
+      [channelId]
+    );
+
+    if (usageResult.rowCount > 0) {
+      res.status(409).json({
+        message:
+          "Нельзя удалить: канал связи используется в компаниях. Архивируйте его или измените канал в связанных компаниях.",
+      });
+      return;
+    }
+
+    const result = await pool.query(
+      `
+        DELETE FROM communication_channels
+        WHERE id = $1
+        RETURNING id
+      `,
+      [channelId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        message: "Канал связи не найден.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Канал связи удалён.",
+    });
+  } catch (error) {
+    if (error?.code === "23503") {
+      res.status(409).json({
+        message: "Нельзя удалить: канал связи используется в компаниях.",
+      });
+      return;
+    }
+
+    console.error("Не удалось удалить канал связи:", error);
+    res.status(500).json({
+      message: "Не удалось удалить канал связи.",
     });
   }
 });

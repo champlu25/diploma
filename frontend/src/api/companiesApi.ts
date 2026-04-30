@@ -1,5 +1,5 @@
 import { httpClient } from "./httpClient";
-import type { Company, CompanyFormValues } from "../types/company";
+import type { Company, CompanyDetails, CompanyFormValues } from "../types/company";
 
 interface CompanyDto {
   id: number;
@@ -12,6 +12,19 @@ interface CompanyDto {
   email: string | null;
   comment: string | null;
   next_contact_at: string | null;
+  legal_address?: string | null;
+  actual_address?: string | null;
+  director_birth_date?: string | null;
+  activity?: string | null;
+  revenue_rub?: number | null;
+  negative_info?: string | null;
+  tax_system_id?: number | null;
+  tax_system_name?: string | null;
+  bik?: string | null;
+  rs?: string | null;
+  ks?: string | null;
+  preferred_communication_channel_id?: number | null;
+  preferred_communication_channel_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +36,24 @@ interface ListCompaniesResponse {
 interface CompanyDtoResponse {
   message: string;
   company: CompanyDto;
+}
+
+interface CompanyDetailsResponse {
+  company: CompanyDto;
+}
+
+export interface CompanyLookupItem {
+  id: number;
+  name: string;
+}
+
+export interface CommunicationChannelLookupItem extends CompanyLookupItem {
+  isActive?: boolean;
+}
+
+interface CompanyLookupsResponse {
+  taxSystems: CompanyLookupItem[];
+  communicationChannels: CommunicationChannelLookupItem[];
 }
 
 interface DeleteCompanyResponse {
@@ -57,11 +88,49 @@ const toPayload = (values: CompanyFormValues) => ({
   email: values.email,
   comment: values.comment,
   nextContactAt: values.nextContactAt,
+  legalAddress: values.legalAddress,
+  actualAddress: values.actualAddress,
+  directorBirthDate: values.directorBirthDate,
+  activity: values.activity,
+  revenueRub: values.revenueRub,
+  negativeInfo: values.negativeInfo,
+  bik: values.bik,
+  rs: values.rs,
+  ks: values.ks,
+  taxSystemId: values.taxSystemId,
+  preferredCommunicationChannelId: values.preferredCommunicationChannelId,
+});
+
+const toCompanyDetails = (dto: CompanyDto): CompanyDetails => ({
+  ...toCompany(dto),
+  legalAddress: dto.legal_address ?? null,
+  actualAddress: dto.actual_address ?? null,
+  directorBirthDate: dto.director_birth_date ?? null,
+  activity: dto.activity ?? null,
+  revenueRub: typeof dto.revenue_rub === "number" ? dto.revenue_rub : dto.revenue_rub ?? null,
+  negativeInfo: dto.negative_info ?? null,
+  bik: dto.bik ?? null,
+  rs: dto.rs ?? null,
+  ks: dto.ks ?? null,
+  taxSystemId: dto.tax_system_id ?? null,
+  taxSystemName: dto.tax_system_name ?? null,
+  preferredCommunicationChannelId: dto.preferred_communication_channel_id ?? null,
+  preferredCommunicationChannelName: dto.preferred_communication_channel_name ?? null,
 });
 
 export const getCompanies = async (): Promise<Company[]> => {
   const { data } = await httpClient.get<ListCompaniesResponse>("/api/companies");
   return data.companies.map(toCompany);
+};
+
+export const getCompanyById = async (companyId: number): Promise<CompanyDetails> => {
+  const { data } = await httpClient.get<CompanyDetailsResponse>(`/api/companies/${companyId}`);
+  return toCompanyDetails(data.company);
+};
+
+export const getCompanyLookups = async (): Promise<CompanyLookupsResponse> => {
+  const { data } = await httpClient.get<CompanyLookupsResponse>("/api/companies/lookups");
+  return data;
 };
 
 export const createCompany = async (values: CompanyFormValues): Promise<CompanyResponse> => {

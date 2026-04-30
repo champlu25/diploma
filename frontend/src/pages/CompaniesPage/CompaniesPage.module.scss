@@ -146,3 +146,18 @@
   background: var(--color-surface);
   border-top: 1px solid rgba(214, 224, 234, 0.7);
 }
+
+.companyLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.companyLink:hover {
+  text-decoration: underline;
+}
