@@ -9,6 +9,7 @@ import { Card } from "../../components/ui/Card/Card";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import { InputField } from "../../components/ui/Field/Field";
+import { Button } from "../../components/ui/Button/Button";
 import { PieChart } from "../../components/charts/PieChart/PieChart";
 import { VerticalBarChart } from "../../components/charts/VerticalBarChart/VerticalBarChart";
 import styles from "./DashboardsPage.module.scss";
@@ -36,6 +37,22 @@ const toFiniteNumberOrZero = (value: unknown): number => {
 };
 
 const formatNumberLike = (value: number): string => value.toLocaleString("ru-RU");
+
+const formatPeriodDate = (value: string): string => {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00`);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleDateString("ru-RU");
+};
+
+const getPeriodLabel = (from: string, to: string): string => {
+  const fromLabel = formatPeriodDate(from);
+  const toLabel = formatPeriodDate(to);
+  if (fromLabel && toLabel) return `${fromLabel} - ${toLabel}`;
+  if (fromLabel) return `с ${fromLabel}`;
+  if (toLabel) return `по ${toLabel}`;
+  return "за весь период";
+};
 
 const startOfDay = (value: string): number | null => {
   if (!value) return null;
@@ -111,10 +128,16 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     () => Array.from(new Set(deals.map((deal) => deal.dealLifecycleStatusName))).sort((a, b) => a.localeCompare(b, "ru-RU")),
     [deals],
   );
+  const activeLifecycleOption = useMemo(
+    () => lifecycleOptions.find((status) => status === "Активные") ?? lifecycleOptions.find((status) => includesAny(status, ["актив"])) ?? lifecycleOptions[0] ?? "",
+    [lifecycleOptions],
+  );
 
   const chartTypeIds = useMemo(() => deriveChartTypeIds(chartTypes), [chartTypes]);
   const fromMs = useMemo(() => startOfDay(periodFrom), [periodFrom]);
   const toMs = useMemo(() => endOfDay(periodTo), [periodTo]);
+  const periodLabel = useMemo(() => getPeriodLabel(periodFrom, periodTo), [periodFrom, periodTo]);
+  const showManagerComparisonCharts = currentUser.role !== "manager";
 
   const periodFilteredDeals = useMemo(() => {
     return deals.filter((deal) => {
@@ -128,8 +151,8 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       return true;
     });
   }, [deals, fromMs, toMs]);
-  const managerCountLifecycleFilter = lifecycleFilters[chartKeys.managerCount] ?? "";
-  const managerIncomeLifecycleFilter = lifecycleFilters[chartKeys.managerIncome] ?? "";
+  const managerCountLifecycleFilter = lifecycleFilters[chartKeys.managerCount] ?? activeLifecycleOption;
+  const managerIncomeLifecycleFilter = lifecycleFilters[chartKeys.managerIncome] ?? activeLifecycleOption;
   const stageAvLifecycleFilter = lifecycleFilters[chartKeys.stageAv] ?? "";
   const leasingAvLifecycleFilter = lifecycleFilters[chartKeys.leasingAv] ?? "";
   const stageAvFilter = managerFilters[chartKeys.stageAv] ?? "";
@@ -159,6 +182,22 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     } finally {
       setSavingChartKey((prev) => (prev === chartKey ? null : prev));
     }
+  };
+
+  const exportPdf = () => {
+    const previousTitle = document.title;
+    let isRestored = false;
+    const restoreTitle = () => {
+      if (isRestored) return;
+      isRestored = true;
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+
+    document.title = `Дашборды - ${periodLabel}`;
+    window.addEventListener("afterprint", restoreTitle);
+    window.print();
+    window.setTimeout(restoreTitle, 5000);
   };
 
   const renderChartTypeSelect = (chartKey: string) => {
@@ -198,21 +237,21 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     </select>
   );
 
-  const renderLifecycleSelect = (chartKey: string) => (
+  const renderLifecycleSelect = (chartKey: string, includeAllOption = true) => (
     <select
       className={styles.chartSelect}
-      value={lifecycleFilters[chartKey] ?? ""}
+      value={lifecycleFilters[chartKey] ?? (includeAllOption ? "" : activeLifecycleOption)}
       onChange={(event) => setLifecycleFilters((prev) => ({ ...prev, [chartKey]: event.target.value }))}
       disabled={isLoading || lifecycleOptions.length === 0}
     >
-      <option value="">Все типы сделок</option>
+      {includeAllOption && <option value="">Все типы сделок</option>}
       {lifecycleOptions.map((status) => <option key={status} value={status}>{status}</option>)}
     </select>
   );
 
-  const renderChartActions = (chartKey: string, includeManagerFilter = true) => (
+  const renderChartActions = (chartKey: string, includeManagerFilter = true, includeLifecycleFilter = true, includeAllLifecycleOption = true) => (
     <>
-      {renderLifecycleSelect(chartKey)}
+      {includeLifecycleFilter && renderLifecycleSelect(chartKey, includeAllLifecycleOption)}
       {includeManagerFilter && showManagerFilter && renderManagerSelect(chartKey)}
       {renderChartTypeSelect(chartKey)}
     </>
@@ -279,11 +318,20 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
 
   return (
     <div className={styles.page}>
+      <div className={styles.printHeader}>
+        <p>Период: {periodLabel}</p>
+      </div>
+
       <div className={styles.headerRow}>
         <PageHeader title="Дашборды" subtitle="Сводные графики по CRM" />
-        <div className={styles.periodFilters}>
-          <InputField label="С даты" type="date" value={periodFrom} onChange={(event) => setPeriodFrom(event.target.value)} />
-          <InputField label="По дату" type="date" value={periodTo} onChange={(event) => setPeriodTo(event.target.value)} />
+        <div className={styles.dashboardControls}>
+          <div className={styles.periodFilters}>
+            <InputField label="С даты" type="date" value={periodFrom} onChange={(event) => setPeriodFrom(event.target.value)} />
+            <InputField label="По дату" type="date" value={periodTo} onChange={(event) => setPeriodTo(event.target.value)} />
+          </div>
+          <Button type="button" variant="ghost" className={styles.exportButton} onClick={exportPdf}>
+            Экспорт PDF
+          </Button>
         </div>
       </div>
 
@@ -299,21 +347,25 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       </div>
 
       <div className={styles.chartsGrid}>
-        <Card title="Распределение сделок по менеджерам" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.managerCount, false)}>
-          {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
-            {getChartView(chartKeys.managerCount) !== chartTypeIds.verticalId && getChartView(chartKeys.managerCount) !== chartTypeIds.pieId && <div className={styles.barList}>{managerCountSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(item.value)}</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0}%` }} /></div></div>)}</div>}
-            {getChartView(chartKeys.managerCount) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Сделки по менеджерам" emptyText="Сделок пока нет" bars={managerCountSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(item.value)}` }))} />}
-            {getChartView(chartKeys.managerCount) === chartTypeIds.pieId && <PieChart ariaLabel="Сделки по менеджерам" emptyText="Сделок пока нет" segments={managerCountSegments} />}
-          </>}
-        </Card>
+        {showManagerComparisonCharts && (
+          <>
+            <Card title="Распределение сделок по менеджерам" subtitle="По выбранному типу сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.managerCount, false, true, false)}>
+              {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
+                {getChartView(chartKeys.managerCount) !== chartTypeIds.verticalId && getChartView(chartKeys.managerCount) !== chartTypeIds.pieId && <div className={styles.barList}>{managerCountSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(item.value)}</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0}%` }} /></div></div>)}</div>}
+                {getChartView(chartKeys.managerCount) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Сделки по менеджерам" emptyText="Сделок пока нет" bars={managerCountSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(item.value)}` }))} />}
+                {getChartView(chartKeys.managerCount) === chartTypeIds.pieId && <PieChart ariaLabel="Сделки по менеджерам" emptyText="Сделок пока нет" segments={managerCountSegments} />}
+              </>}
+            </Card>
 
-        <Card title="Сумма общего дохода АВ по менеджерам" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.managerIncome, false)}>
-          {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
-            {getChartView(chartKeys.managerIncome) !== chartTypeIds.verticalId && getChartView(chartKeys.managerIncome) !== chartTypeIds.pieId && <div className={styles.barList}>{managerIncomeSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(Math.round(item.value))} ₽</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0}%` }} /></div></div>)}</div>}
-            {getChartView(chartKeys.managerIncome) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Доход по менеджерам" emptyText="Сделок пока нет" bars={managerIncomeSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽` }))} />}
-            {getChartView(chartKeys.managerIncome) === chartTypeIds.pieId && <PieChart ariaLabel="Доход по менеджерам" emptyText="Сделок пока нет" segments={managerIncomeSegments} />}
-          </>}
-        </Card>
+            <Card title="Сумма общего дохода АВ по менеджерам" subtitle="По выбранному типу сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.managerIncome, false, true, false)}>
+              {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
+                {getChartView(chartKeys.managerIncome) !== chartTypeIds.verticalId && getChartView(chartKeys.managerIncome) !== chartTypeIds.pieId && <div className={styles.barList}>{managerIncomeSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(Math.round(item.value))} ₽</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0}%` }} /></div></div>)}</div>}
+                {getChartView(chartKeys.managerIncome) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Доход по менеджерам" emptyText="Сделок пока нет" bars={managerIncomeSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽` }))} />}
+                {getChartView(chartKeys.managerIncome) === chartTypeIds.pieId && <PieChart ariaLabel="Доход по менеджерам" emptyText="Сделок пока нет" segments={managerIncomeSegments} />}
+              </>}
+            </Card>
+          </>
+        )}
 
         <Card title="Лизинговые" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.leasingAv)}>
           {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>

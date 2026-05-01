@@ -10,11 +10,27 @@
   gap: 12px;
 }
 
+.printHeader {
+  display: none;
+}
+
+.dashboardControls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
 .periodFilters {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
   align-items: end;
+}
+
+.exportButton {
+  width: 100%;
+  white-space: nowrap;
 }
 
 .alert { width: 100%; }
@@ -136,10 +152,135 @@
     justify-content: end;
   }
 
+  .dashboardControls {
+    grid-template-columns: auto auto;
+    justify-content: end;
+    gap: 12px;
+  }
+
+  .exportButton {
+    width: auto;
+  }
+
   .metricsGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
   .chartsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  :global(body) {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10pt;
+  }
+
+  .page {
+    gap: 9px;
+    padding: 9mm 12mm;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .printHeader {
+    display: block;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+  }
+
+  .printHeader p {
+    margin: 0;
+    color: #475569;
+    font-size: 10pt;
+    font-weight: 600;
+  }
+
+  .headerRow,
+  .alert,
+  .metricsGrid {
+    display: none !important;
+  }
+
+  .chartsGrid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    padding-inline: 3mm;
+  }
+
+  .metricCard,
+  .chartCard {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .page :global(section) {
+    border-color: #cbd5e1 !important;
+    border-radius: 6px !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    padding: 7px 8px !important;
+    box-shadow: none !important;
+  }
+
+  .chartCard:last-child {
+    margin-top: 10px;
+  }
+
+  .page :global(section header) {
+    gap: 8px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .page :global(section select),
+  .page :global(section button) {
+    display: none !important;
+  }
+
+  .metricValue,
+  .metricValueHot,
+  .metricValueCold {
+    font-size: 14pt;
+    padding: 2px 0;
+  }
+
+  .chartCard {
+    min-height: 0;
+  }
+
+  .barList {
+    gap: 4px;
+  }
+
+  .barRow {
+    gap: 4px;
+  }
+
+  .barMeta {
+    gap: 6px;
+  }
+
+  .barLabel,
+  .barValue {
+    font-size: 8.5pt;
+  }
+
+  .barTrack {
+    height: 7px;
+  }
+
+  .chartCard :global(svg) {
+    max-width: 230px !important;
+    max-height: 230px !important;
   }
 }

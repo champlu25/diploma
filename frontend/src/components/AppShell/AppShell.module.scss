@@ -138,3 +138,21 @@
   flex-direction: column;
   gap: 16px;
 }
+
+@media print {
+  .shell {
+    min-height: auto;
+    display: block;
+    background: #ffffff;
+  }
+
+  .header {
+    display: none !important;
+  }
+
+  .main {
+    display: block;
+    padding: 0;
+    gap: 0;
+  }
+}
