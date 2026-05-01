@@ -193,12 +193,18 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
     const loadManagers = async () => {
       try {
+        const ownFilterOption = {
+          value: String(currentUser.id),
+          label: "\u041c\u043e\u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
+        };
+
         if (currentUser.role === "owner") {
           const users = await getUsers();
           const options = users
             .filter((user) => user.role === "manager" || user.role === "group_lead")
             .map((user) => ({ value: String(user.id), label: getUserLabel(user) }))
             .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+          options.unshift(ownFilterOption);
 
           if (!isCancelled) {
             setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
@@ -210,13 +216,17 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         const options = managers
           .map((manager) => ({ value: String(manager.id), label: getUserLabel(manager) }))
           .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+        options.unshift(ownFilterOption);
 
         if (!isCancelled) {
           setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
         }
       } catch {
         if (!isCancelled) {
-          setManagerFilterOptions([{ value: "", label: "Все менеджеры" }]);
+          setManagerFilterOptions([
+            { value: "", label: "Все менеджеры" },
+            { value: String(currentUser.id), label: "\u041c\u043e\u0438 \u0441\u0434\u0435\u043b\u043a\u0438" },
+          ]);
         }
       }
     };
@@ -226,7 +236,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser.role, showManagerFilter]);
+  }, [currentUser.id, currentUser.role, showManagerFilter]);
 
   useEffect(() => {
     if (!showManagerFilter) return;

@@ -407,12 +407,18 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
     const loadManagers = async () => {
       try {
+        const ownFilterOption: SelectFieldOption = {
+          value: String(currentUser.id),
+          label: "\u041c\u043e\u0438 \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
+        };
+
         if (currentUser.role === "owner") {
           const users = await getUsers();
           const options: SelectFieldOption[] = users
             .filter((user) => user.role === "manager" || user.role === "group_lead")
             .map((user) => ({ value: String(user.id), label: getUserLabel(user) }))
             .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+          options.unshift(ownFilterOption);
 
           if (!isCancelled) {
             setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
@@ -424,13 +430,17 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         const options: SelectFieldOption[] = managers
           .map((manager) => ({ value: String(manager.id), label: getUserLabel(manager) }))
           .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+        options.unshift(ownFilterOption);
 
         if (!isCancelled) {
           setManagerFilterOptions([{ value: "", label: "Все менеджеры" }, ...options]);
         }
       } catch {
         if (!isCancelled) {
-          setManagerFilterOptions([{ value: "", label: "Все менеджеры" }]);
+          setManagerFilterOptions([
+            { value: "", label: "Все менеджеры" },
+            { value: String(currentUser.id), label: "\u041c\u043e\u0438 \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438" },
+          ]);
         }
       }
     };
@@ -440,7 +450,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser.role, showManagerFilter]);
+  }, [currentUser.id, currentUser.role, showManagerFilter]);
 
   useEffect(() => {
     if (!showManagerFilter) return;
@@ -1210,95 +1220,6 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               disabled={isEditSubmitting}
             />
 
-            <InputField
-              label="Юридический адрес"
-              value={editForm.legalAddress}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, legalAddress: event.target.value }))}
-              disabled={isEditSubmitting}
-            />
-
-            <InputField
-              label="Фактический адрес"
-              value={editForm.actualAddress}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, actualAddress: event.target.value }))}
-              disabled={isEditSubmitting}
-            />
-
-            <InputField
-              label="День рождения директора"
-              type="date"
-              value={editForm.directorBirthDate}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))}
-              disabled={isEditSubmitting}
-            />
-
-            <TextAreaField
-              label="Вид деятельности"
-              value={editForm.activity}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, activity: event.target.value }))}
-              disabled={isEditSubmitting}
-              rows={3}
-            />
-
-            <InputField
-              label="Выручка, ₽"
-              value={editForm.revenueRub}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, revenueRub: event.target.value }))}
-              disabled={isEditSubmitting}
-              error={editErrors.revenueRub}
-              inputMode="numeric"
-            />
-
-            <TextAreaField
-              label="Выявленный негатив"
-              value={editForm.negativeInfo}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, negativeInfo: event.target.value }))}
-              disabled={isEditSubmitting}
-              rows={3}
-            />
-
-            <SelectField
-              label="Предпочитает общение через"
-              value={editForm.preferredCommunicationChannelId}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, preferredCommunicationChannelId: event.target.value }))
-              }
-              options={communicationChannelOptions}
-              disabled={isEditSubmitting}
-            />
-
-            <SelectField
-              label="Система налогообложения"
-              value={editForm.taxSystemId}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, taxSystemId: event.target.value }))}
-              options={taxSystemOptions}
-              disabled={isEditSubmitting}
-            />
-
-            <InputField
-              label="БИК"
-              value={editForm.bik}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, bik: event.target.value }))}
-              disabled={isEditSubmitting}
-              error={editErrors.bik}
-            />
-
-            <InputField
-              label="Р/С"
-              value={editForm.rs}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, rs: event.target.value }))}
-              disabled={isEditSubmitting}
-              error={editErrors.rs}
-            />
-
-            <InputField
-              label="К/С"
-              value={editForm.ks}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, ks: event.target.value }))}
-              disabled={isEditSubmitting}
-              error={editErrors.ks}
-            />
-
             <TextAreaField
               label="Комментарий"
               value={editForm.comment}
@@ -1306,6 +1227,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               disabled={isEditSubmitting}
               rows={4}
             />
+
 
             <div className={styles.modalActions}>
               <Button type="submit" disabled={isEditSubmitting}>

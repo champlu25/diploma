@@ -1,25 +1,23 @@
-.root {
+﻿.root {
   display: grid;
-  grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
-  gap: 48px;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 56px;
   align-items: center;
   max-width: 100%;
 }
 
 .svg {
   width: 100%;
-  max-width: 200px;
+  max-width: 320px;
   height: auto;
 }
 
-.track {
-  stroke: rgba(148, 163, 184, 0.35);
-}
+.track { stroke: rgba(148, 163, 184, 0.35); }
 
 .legend {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -27,15 +25,16 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  font-size: 16px;
+  font-size: 18px;
   color: rgba(15, 23, 42, 0.92);
 }
 
 .swatch {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border-radius: 999px;
   background: var(--color);
+  margin-top: 6px;
 }
 
 .text {
@@ -47,8 +46,6 @@
 }
 
 .label {
-  overflow: visible;
-  text-overflow: unset;
   white-space: normal;
   word-break: break-word;
 }
@@ -64,9 +61,14 @@
   font-size: 14px;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 700px) {
   .root {
     grid-template-columns: 1fr;
-    justify-items: start;
+    justify-items: center;
+    gap: 20px;
+  }
+
+  .legendRow {
+    font-size: 16px;
   }
 }

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "../../types/user";
-import { getDealLookups, getDeals } from "../../api/dealsApi";
+import { getDeals } from "../../api/dealsApi";
 import { getChartViewSettings, saveChartViewSetting } from "../../api/dashboardsApi";
 import type { Deal } from "../../types/deal";
 import { getApiErrorMessage } from "../../utils/httpError";
@@ -17,18 +17,17 @@ interface DashboardsPageProps {
   currentUser: AuthUser;
 }
 
-const COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#f59e0b",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-];
+const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
+const chartKeys = { managerCount: "manager_deals_count", managerIncome: "manager_income_rub", stageAv: "stage_av_rub", leasingAv: "leasing_av_rub" } as const;
 
 const includesAny = (value: string, needles: string[]): boolean => {
   const normalized = value.toLocaleLowerCase("ru-RU");
   return needles.some((needle) => normalized.includes(needle.toLocaleLowerCase("ru-RU")));
+};
+
+const includesWord = (value: string, needle: string): boolean => {
+  const normalized = value.toLocaleLowerCase("ru-RU");
+  return normalized.includes(needle.toLocaleLowerCase("ru-RU"));
 };
 
 const toFiniteNumberOrZero = (value: unknown): number => {
@@ -38,107 +37,103 @@ const toFiniteNumberOrZero = (value: unknown): number => {
 
 const formatNumberLike = (value: number): string => value.toLocaleString("ru-RU");
 
-const startOfDay = (date: Date) => {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
+const startOfDay = (value: string): number | null => {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isFinite(date.getTime()) ? date.getTime() : null;
 };
 
-const endOfDay = (date: Date) => {
-  const next = new Date(date);
-  next.setHours(23, 59, 59, 999);
-  return next;
-};
-
-const includesWord = (value: string, needle: string): boolean => {
-  const normalized = value.toLocaleLowerCase("ru-RU");
-  return normalized.includes(needle.toLocaleLowerCase("ru-RU"));
+const endOfDay = (value: string): number | null => {
+  if (!value) return null;
+  const date = new Date(`${value}T23:59:59.999`);
+  return Number.isFinite(date.getTime()) ? date.getTime() : null;
 };
 
 const deriveChartTypeIds = (chartTypes: Array<{ id: number; name: string }>) => {
   const sorted = [...chartTypes].sort((a, b) => a.id - b.id);
-
   const pickByExactName = (name: string) =>
-    chartTypes.find((item) => item.name.trim().toLocaleLowerCase("ru-RU") === name.toLocaleLowerCase("ru-RU"))?.id ??
-    null;
-
+    chartTypes.find((item) => item.name.trim().toLocaleLowerCase("ru-RU") === name.toLocaleLowerCase("ru-RU"))?.id ?? null;
   const pickByNameLike = (needle: string) => chartTypes.find((item) => includesWord(item.name, needle))?.id ?? null;
-
-  const horizontalId =
-    pickByExactName("Горизонтальный") ?? pickByNameLike("горизонт") ?? sorted[0]?.id ?? null;
-  const verticalId = pickByExactName("Вертикальный") ?? pickByNameLike("вертик") ?? sorted[1]?.id ?? null;
-  const pieId = pickByExactName("Круговой") ?? pickByNameLike("круг") ?? sorted[2]?.id ?? null;
-
-  // If names are unexpected, fall back to positional mapping to keep switching usable.
-  const finalHorizontalId = horizontalId ?? sorted[0]?.id ?? null;
-  const finalVerticalId = verticalId ?? sorted[1]?.id ?? null;
-  const finalPieId = pieId ?? sorted[2]?.id ?? null;
-
-  return { horizontalId: finalHorizontalId, verticalId: finalVerticalId, pieId: finalPieId };
+  return {
+    horizontalId: pickByExactName("Горизонтальный") ?? pickByNameLike("горизонт") ?? sorted[0]?.id ?? null,
+    verticalId: pickByExactName("Вертикальный") ?? pickByNameLike("вертик") ?? sorted[1]?.id ?? null,
+    pieId: pickByExactName("Круговой") ?? pickByNameLike("круг") ?? sorted[2]?.id ?? null,
+  };
 };
 
 export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [lookups, setLookups] = useState<{ dealLifecycleStatuses: { id: number; name: string }[] } | null>(null);
-  const [selectedLifecycleStatusId, setSelectedLifecycleStatusId] = useState<number | null>(null);
-  const [periodFrom, setPeriodFrom] = useState<string>("");
-  const [periodTo, setPeriodTo] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [chartViews, setChartViews] = useState<Record<string, number>>({});
   const [chartTypes, setChartTypes] = useState<Array<{ id: number; name: string }>>([]);
   const [savingChartKey, setSavingChartKey] = useState<string | null>(null);
+  const [managerFilters, setManagerFilters] = useState<Record<string, string>>({});
+  const [lifecycleFilters, setLifecycleFilters] = useState<Record<string, string>>({});
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
-
     const loadDeals = async () => {
       try {
         setError(null);
         setIsLoading(true);
-        const [data, dealLookups] = await Promise.all([getDeals(), getDealLookups()]);
-        if (!isCancelled) {
-          setDeals(data);
-          setLookups({ dealLifecycleStatuses: dealLookups.dealLifecycleStatuses });
-
-          const active = dealLookups.dealLifecycleStatuses.find((item) => includesAny(item.name, ["актив"]));
-          setSelectedLifecycleStatusId(active?.id ?? dealLookups.dealLifecycleStatuses[0]?.id ?? null);
-        }
-
+        const data = await getDeals();
+        if (!isCancelled) setDeals(data);
         try {
           const viewSettings = await getChartViewSettings();
           if (!isCancelled) {
             const nextViews: Record<string, number> = {};
-            for (const setting of viewSettings.settings) {
-              nextViews[setting.chartKey] = setting.chartTypeId;
-            }
+            for (const setting of viewSettings.settings) nextViews[setting.chartKey] = setting.chartTypeId;
             setChartViews(nextViews);
             setChartTypes(viewSettings.chartTypes);
           }
-        } catch (settingsError) {
-          if (!isCancelled) {
-            console.warn("Не удалось загрузить настройки отображения графиков:", settingsError);
-          }
-        }
+        } catch {}
       } catch (err) {
-        if (!isCancelled) {
-          setError(getApiErrorMessage(err, "Не удалось загрузить сделки."));
-        }
+        if (!isCancelled) setError(getApiErrorMessage(err, "Не удалось загрузить сделки."));
       } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
+        if (!isCancelled) setIsLoading(false);
       }
     };
-
     void loadDeals();
-
     return () => {
       isCancelled = true;
     };
   }, [currentUser.id]);
 
+  const managerOptions = useMemo(
+    () => Array.from(new Set(deals.map((deal) => deal.managerName))).sort((a, b) => a.localeCompare(b, "ru-RU")),
+    [deals],
+  );
+  const showManagerFilter = currentUser.role === "owner" || currentUser.role === "group_lead";
+  const lifecycleOptions = useMemo(
+    () => Array.from(new Set(deals.map((deal) => deal.dealLifecycleStatusName))).sort((a, b) => a.localeCompare(b, "ru-RU")),
+    [deals],
+  );
+
   const chartTypeIds = useMemo(() => deriveChartTypeIds(chartTypes), [chartTypes]);
+  const fromMs = useMemo(() => startOfDay(periodFrom), [periodFrom]);
+  const toMs = useMemo(() => endOfDay(periodTo), [periodTo]);
+
+  const periodFilteredDeals = useMemo(() => {
+    return deals.filter((deal) => {
+      if (fromMs === null && toMs === null) return true;
+      const source = deal.createdAt ?? deal.updatedAt ?? deal.completedAt;
+      if (!source) return false;
+      const ms = new Date(source).getTime();
+      if (!Number.isFinite(ms)) return false;
+      if (fromMs !== null && ms < fromMs) return false;
+      if (toMs !== null && ms > toMs) return false;
+      return true;
+    });
+  }, [deals, fromMs, toMs]);
+  const managerCountLifecycleFilter = lifecycleFilters[chartKeys.managerCount] ?? "";
+  const managerIncomeLifecycleFilter = lifecycleFilters[chartKeys.managerIncome] ?? "";
+  const stageAvLifecycleFilter = lifecycleFilters[chartKeys.stageAv] ?? "";
+  const leasingAvLifecycleFilter = lifecycleFilters[chartKeys.leasingAv] ?? "";
+  const stageAvFilter = managerFilters[chartKeys.stageAv] ?? "";
+  const leasingAvFilter = managerFilters[chartKeys.leasingAv] ?? "";
 
   const getChartView = (chartKey: string): number | null => {
     const stored = chartViews[chartKey];
@@ -146,39 +141,18 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     return chartTypeIds.horizontalId;
   };
 
-  const toPieSegments = (
-    items: Array<{ label: string; value: number; color: string }>,
-    maxSegments = 6,
-  ) => {
-    const sorted = [...items].sort((a, b) => b.value - a.value);
-    if (sorted.length <= maxSegments) return sorted;
-
-    const keep = sorted.slice(0, Math.max(1, maxSegments - 1));
-    const rest = sorted.slice(keep.length);
-    const restSum = rest.reduce((sum, item) => sum + toFiniteNumberOrZero(item.value), 0);
-
-    return restSum > 0
-      ? [...keep, { label: "Другое", value: restSum, color: "#94a3b8" }]
-      : keep;
-  };
-
   const setChartView = async (chartKey: string, next: number) => {
     const current = getChartView(chartKey);
     if (current === next) return;
-
     setChartViews((prev) => ({ ...prev, [chartKey]: next }));
     setSavingChartKey(chartKey);
-
     try {
       await saveChartViewSetting(chartKey, next);
     } catch (err) {
       setChartViews((prev) => {
         const nextViews = { ...prev };
-        if (typeof current === "number" && Number.isFinite(current) && current > 0) {
-          nextViews[chartKey] = current;
-        } else {
-          delete nextViews[chartKey];
-        }
+        if (typeof current === "number" && Number.isFinite(current) && current > 0) nextViews[chartKey] = current;
+        else delete nextViews[chartKey];
         return nextViews;
       });
       setError(getApiErrorMessage(err, "Не удалось сохранить тип графика."));
@@ -198,584 +172,164 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           const valueRaw = event.currentTarget.value;
           event.currentTarget.value = "";
           if (!valueRaw) return;
-
           const value = Number(valueRaw);
           if (!Number.isFinite(value) || value <= 0) return;
           void setChartView(chartKey, value);
         }}
         disabled={isLoading || savingChartKey === chartKey || options.length === 0 || chartTypes.length === 0}
-        title="Выбрать тип графика"
-        aria-label="Тип графика"
       >
-        <option value="" disabled>
-          Тип графика
-        </option>
+        <option value="" disabled>Тип графика</option>
         {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.name}
-          </option>
+          <option key={option.id} value={option.id}>{option.name}</option>
         ))}
       </select>
     );
   };
 
-  const selectedLifecycleStatusName = useMemo(() => {
-    if (!selectedLifecycleStatusId || !lookups) return null;
-    return lookups.dealLifecycleStatuses.find((item) => item.id === selectedLifecycleStatusId)?.name ?? null;
-  }, [lookups, selectedLifecycleStatusId]);
+  const renderManagerSelect = (chartKey: string) => (
+    <select
+      className={styles.chartSelect}
+      value={managerFilters[chartKey] ?? ""}
+      onChange={(event) => setManagerFilters((prev) => ({ ...prev, [chartKey]: event.target.value }))}
+      disabled={isLoading || managerOptions.length === 0}
+    >
+      <option value="">Все менеджеры</option>
+      {managerOptions.map((manager) => <option key={manager} value={manager}>{manager}</option>)}
+    </select>
+  );
 
-  const period = useMemo(() => {
-    const fromDate = periodFrom ? startOfDay(new Date(`${periodFrom}T00:00:00`)) : null;
-    const toDate = periodTo ? endOfDay(new Date(`${periodTo}T00:00:00`)) : null;
+  const renderLifecycleSelect = (chartKey: string) => (
+    <select
+      className={styles.chartSelect}
+      value={lifecycleFilters[chartKey] ?? ""}
+      onChange={(event) => setLifecycleFilters((prev) => ({ ...prev, [chartKey]: event.target.value }))}
+      disabled={isLoading || lifecycleOptions.length === 0}
+    >
+      <option value="">Все типы сделок</option>
+      {lifecycleOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+    </select>
+  );
 
-    const fromValid = fromDate && Number.isFinite(fromDate.getTime()) ? fromDate : null;
-    const toValid = toDate && Number.isFinite(toDate.getTime()) ? toDate : null;
+  const renderChartActions = (chartKey: string, includeManagerFilter = true) => (
+    <>
+      {renderLifecycleSelect(chartKey)}
+      {includeManagerFilter && showManagerFilter && renderManagerSelect(chartKey)}
+      {renderChartTypeSelect(chartKey)}
+    </>
+  );
 
-    const labelFrom = fromValid ? periodFrom : "—";
-    const labelTo = toValid ? periodTo : "—";
+  const activeDeals = useMemo(() => periodFilteredDeals.filter((deal) => includesAny(deal.dealLifecycleStatusName, ["актив"])), [periodFilteredDeals]);
+  const realizedDeals = useMemo(() => periodFilteredDeals.filter((deal) => includesAny(deal.dealLifecycleStatusName, ["реализ"])), [periodFilteredDeals]);
+  const delayedDeals = useMemo(() => periodFilteredDeals.filter((deal) => includesAny(deal.dealLifecycleStatusName, ["отлож"])), [periodFilteredDeals]);
+  const failedDeals = useMemo(() => periodFilteredDeals.filter((deal) => includesAny(deal.dealLifecycleStatusName, ["несост"])), [periodFilteredDeals]);
 
-    const label =
-      fromValid || toValid
-        ? `период: ${labelFrom} – ${labelTo}`
-        : "период: без фильтра";
-
-    return { from: fromValid, to: toValid, label };
-  }, [periodFrom, periodTo]);
-
-  const filteredDeals = useMemo(() => {
-    if (!selectedLifecycleStatusId) return [];
-
-    const isRealized = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["реализ"]);
-    const isFailed = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["несост"]);
-    const isDelayed = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["отлож"]);
-
-    const fromMs = period.from ? period.from.getTime() : null;
-    const toMs = period.to ? period.to.getTime() : null;
-
-    return deals
-      .filter((deal) => deal.dealLifecycleStatusId === selectedLifecycleStatusId)
-      .filter((deal) => {
-        if (fromMs === null && toMs === null) return true;
-
-        const timeValue =
-          isRealized || isFailed
-            ? deal.completedAt
-            : isDelayed
-              ? deal.updatedAt
-              : deal.createdAt;
-
-        if (!timeValue) return false;
-        const date = new Date(timeValue);
-        if (Number.isNaN(date.getTime())) return false;
-
-        const ms = date.getTime();
-        if (fromMs !== null && ms < fromMs) return false;
-        if (toMs !== null && ms > toMs) return false;
-        return true;
-      });
-  }, [deals, period.from, period.to, selectedLifecycleStatusId, selectedLifecycleStatusName]);
-
-  const leasingSegments = useMemo(() => {
-    const aggregates = new Map<string, { count: number; sum: number }>();
-
-    for (const deal of filteredDeals) {
-      const key = deal.leasingCompanyName;
-      const current = aggregates.get(key) ?? { count: 0, sum: 0 };
-      aggregates.set(key, {
-        count: current.count + 1,
-        sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub),
-      });
-    }
-
-    return Array.from(aggregates.entries())
-      .map(([label, { count, sum }]) => ({
-        label,
-        count,
-        value: sum,
-      }))
-      .sort((a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"))
-      .map((item, index) => ({
-        ...item,
-        color: COLORS[index % COLORS.length]!,
-      }));
-  }, [filteredDeals]);
-
-  const stageSegments = useMemo(() => {
-    const aggregates = new Map<string, { count: number; sum: number }>();
-
-    for (const deal of filteredDeals) {
-      const key = deal.dealStageName;
-      const current = aggregates.get(key) ?? { count: 0, sum: 0 };
-      aggregates.set(key, {
-        count: current.count + 1,
-        sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub),
-      });
-    }
-
-    return Array.from(aggregates.entries())
-      .map(([label, { count, sum }]) => ({
-        label,
-        count,
-        value: sum,
-      }))
-      .sort((a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"))
-      .map((item, index) => ({
-        ...item,
-        color: COLORS[index % COLORS.length]!,
-      }));
-  }, [filteredDeals]);
+  const potentialIncomeRub = useMemo(() => activeDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0), [activeDeals]);
+  const earnedRub = useMemo(() => realizedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0), [realizedDeals]);
+  const delayedIncomeRub = useMemo(() => delayedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0), [delayedDeals]);
+  const missedIncomeRub = useMemo(() => failedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0), [failedDeals]);
+  const hotDealsCount = useMemo(() => activeDeals.filter((deal) => includesAny(deal.dealStatusName, ["горяч"]))?.length ?? 0, [activeDeals]);
+  const coldDealsCount = useMemo(() => activeDeals.filter((deal) => includesAny(deal.dealStatusName, ["холод"]))?.length ?? 0, [activeDeals]);
 
   const managerCountSegments = useMemo(() => {
     const counts = new Map<string, number>();
-
-    for (const deal of filteredDeals) {
-      const key = deal.managerName;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+    for (const deal of periodFilteredDeals) {
+      if (managerCountLifecycleFilter && deal.dealLifecycleStatusName !== managerCountLifecycleFilter) continue;
+      counts.set(deal.managerName, (counts.get(deal.managerName) ?? 0) + 1);
     }
-
-    return Array.from(counts.entries())
-      .map(([label, value], index) => ({
-        label,
-        value,
-        color: COLORS[index % COLORS.length]!,
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredDeals]);
+    return Array.from(counts.entries()).map(([label, value], index) => ({ label, value, color: COLORS[index % COLORS.length]! })).sort((a, b) => b.value - a.value);
+  }, [periodFilteredDeals, managerCountLifecycleFilter]);
 
   const managerIncomeSegments = useMemo(() => {
     const sums = new Map<string, number>();
-
-    for (const deal of filteredDeals) {
-      const key = deal.managerName;
-      sums.set(key, (sums.get(key) ?? 0) + toFiniteNumberOrZero(deal.advanceTotalRub));
+    for (const deal of periodFilteredDeals) {
+      if (managerIncomeLifecycleFilter && deal.dealLifecycleStatusName !== managerIncomeLifecycleFilter) continue;
+      sums.set(deal.managerName, (sums.get(deal.managerName) ?? 0) + toFiniteNumberOrZero(deal.advanceTotalRub));
     }
+    return Array.from(sums.entries()).map(([label, value], index) => ({ label, value, color: COLORS[index % COLORS.length]! })).sort((a, b) => b.value - a.value);
+  }, [periodFilteredDeals, managerIncomeLifecycleFilter]);
 
-    return Array.from(sums.entries())
-      .map(([label, value], index) => ({
-        label,
-        value,
-        color: COLORS[index % COLORS.length]!,
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredDeals]);
-
-  const totalIncomeRub = useMemo(() => {
-    return filteredDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0);
-  }, [filteredDeals]);
-
-  const isActiveFilter = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["актив"]);
-  const isRealizedFilter = selectedLifecycleStatusName !== null && includesAny(selectedLifecycleStatusName, ["реализ"]);
-
-  const hotColdCounts = useMemo(() => {
-    let hot = 0;
-    let cold = 0;
-
-    for (const deal of filteredDeals) {
-      if (includesAny(deal.dealStatusName, ["горяч"])) {
-        hot += 1;
-        continue;
-      }
-
-      if (includesAny(deal.dealStatusName, ["холод"])) {
-        cold += 1;
-      }
+  const stageSegments = useMemo(() => {
+    const aggregates = new Map<string, { count: number; sum: number }>();
+    for (const deal of periodFilteredDeals) {
+      if (stageAvFilter && deal.managerName !== stageAvFilter) continue;
+      if (stageAvLifecycleFilter && deal.dealLifecycleStatusName !== stageAvLifecycleFilter) continue;
+      const key = deal.dealStageName;
+      const current = aggregates.get(key) ?? { count: 0, sum: 0 };
+      aggregates.set(key, { count: current.count + 1, sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub) });
     }
+    return Array.from(aggregates.entries()).map(([label, { count, sum }], index) => ({ label, count, value: sum, color: COLORS[index % COLORS.length]! })).sort((a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"));
+  }, [periodFilteredDeals, stageAvFilter, stageAvLifecycleFilter]);
 
-    return { hot, cold };
-  }, [filteredDeals]);
-
-  const managerIncomeTitle = isActiveFilter
-    ? "Прогноз (АВ, руб.) по менеджерам"
-    : isRealizedFilter
-      ? "Факт (АВ, руб.) по менеджерам"
-      : "Потенциал (АВ, руб.) по менеджерам";
-
-  const incomeTitle = isActiveFilter
-    ? "Потенциальный доход (АВ, руб.), ₽"
-    : isRealizedFilter
-      ? "Заработали (АВ, руб.), ₽"
-      : "Потенциальный доход (АВ, руб.), ₽";
+  const leasingSegments = useMemo(() => {
+    const aggregates = new Map<string, { count: number; sum: number }>();
+    for (const deal of periodFilteredDeals) {
+      if (leasingAvFilter && deal.managerName !== leasingAvFilter) continue;
+      if (leasingAvLifecycleFilter && deal.dealLifecycleStatusName !== leasingAvLifecycleFilter) continue;
+      const key = deal.leasingCompanyName;
+      const current = aggregates.get(key) ?? { count: 0, sum: 0 };
+      aggregates.set(key, { count: current.count + 1, sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub) });
+    }
+    return Array.from(aggregates.entries()).map(([label, { count, sum }], index) => ({ label, count, value: sum, color: COLORS[index % COLORS.length]! })).sort((a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"));
+  }, [periodFilteredDeals, leasingAvFilter, leasingAvLifecycleFilter]);
 
   const managerCountMax = useMemo(() => Math.max(0, ...managerCountSegments.map((s) => s.value)), [managerCountSegments]);
-  const managerIncomeMax = useMemo(
-    () => Math.max(0, ...managerIncomeSegments.map((s) => s.value)),
-    [managerIncomeSegments],
-  );
+  const managerIncomeMax = useMemo(() => Math.max(0, ...managerIncomeSegments.map((s) => s.value)), [managerIncomeSegments]);
   const stageAvMax = useMemo(() => Math.max(0, ...stageSegments.map((s) => s.value)), [stageSegments]);
   const leasingAvMax = useMemo(() => Math.max(0, ...leasingSegments.map((s) => s.value)), [leasingSegments]);
-  const totalDealsCount = filteredDeals.length;
-
-  const chartKeys = {
-    managerCount: "manager_deals_count",
-    managerIncome: "manager_income_rub",
-    stageAv: "stage_av_rub",
-    leasingAv: "leasing_av_rub",
-  } as const;
 
   return (
     <div className={styles.page}>
-      <PageHeader title="Дашборды" subtitle="Сводные графики по CRM" />
-
-      <div className={styles.filtersRow} aria-label="Фильтры дашборда">
-        {lookups && (
-          <nav className={styles.statusNav} aria-label="Фильтр по жизненному циклу сделок">
-            {lookups.dealLifecycleStatuses.map((status) => (
-              <button
-                key={status.id}
-                type="button"
-                className={`${styles.statusLink} ${status.id === selectedLifecycleStatusId ? styles.statusActive : ""}`}
-                onClick={() => setSelectedLifecycleStatusId(status.id)}
-                disabled={isLoading}
-              >
-                {status.name}
-              </button>
-            ))}
-          </nav>
-        )}
-
-        <div className={styles.periodRow} aria-label="Фильтр по периоду">
-          <InputField
-            label="С даты"
-            type="date"
-            value={periodFrom}
-            onChange={(event) => setPeriodFrom(event.target.value)}
-            disabled={isLoading}
-          />
-          <InputField
-            label="По дату"
-            type="date"
-            value={periodTo}
-            onChange={(event) => setPeriodTo(event.target.value)}
-            disabled={isLoading}
-          />
+      <div className={styles.headerRow}>
+        <PageHeader title="Дашборды" subtitle="Сводные графики по CRM" />
+        <div className={styles.periodFilters}>
+          <InputField label="С даты" type="date" value={periodFrom} onChange={(event) => setPeriodFrom(event.target.value)} />
+          <InputField label="По дату" type="date" value={periodTo} onChange={(event) => setPeriodTo(event.target.value)} />
         </div>
       </div>
 
-      {error && (
-        <Alert tone="error" className={styles.alert}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert tone="error" className={styles.alert}>{error}</Alert>}
 
-      <div className={styles.grid}>
-        <div className={styles.rowFull}>
-          <div className={styles.rowGrid} aria-label="Ключевые показатели и менеджеры">
-            <Card
-              title={incomeTitle}
-              subtitle={
-                selectedLifecycleStatusName
-                  ? `Срез: ${selectedLifecycleStatusName}, ${period.label}, сделок: ${totalDealsCount}`
-                  : `${period.label}, сделок: ${totalDealsCount}`
-              }
-              className={`${styles.card} ${styles.fixedCard}`}
-            >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <div className={styles.incomeBlock}>
-                  <div className={styles.incomeNumber} aria-label="Доход">
-                    {Math.round(totalIncomeRub).toLocaleString("ru-RU")}
-                  </div>
-                  {isActiveFilter && (
-                    <div className={styles.hotColdRow} aria-label="Горячие и холодные сделки">
-                      <div className={styles.hotColdItem}>
-                        <span className={styles.hotColdLabel}>Горячие</span>
-                        <span className={styles.hotColdValue}>{formatNumberLike(hotColdCounts.hot)}</span>
-                      </div>
-                      <div className={styles.hotColdItem}>
-                        <span className={styles.hotColdLabel}>Холодные</span>
-                        <span className={styles.hotColdValue}>{formatNumberLike(hotColdCounts.cold)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </Card>
+      <div className={styles.metricsGrid}>
+        <Card title="Потенциальный доход" subtitle="По активным сделкам" className={styles.metricCard}>{isLoading ? <Spinner size={22} /> : <div className={styles.metricValue}>{formatNumberLike(Math.round(potentialIncomeRub))} ₽</div>}</Card>
+        <Card title="Горячие сделки" subtitle="По активным сделкам" className={styles.metricCard}>{isLoading ? <Spinner size={22} /> : <div className={styles.metricValueHot}>{formatNumberLike(hotDealsCount)}</div>}</Card>
+        <Card title="Холодные сделки" subtitle="По активным сделкам" className={styles.metricCard}>{isLoading ? <Spinner size={22} /> : <div className={styles.metricValueCold}>{formatNumberLike(coldDealsCount)}</div>}</Card>
+        <Card title="Заработок" subtitle="По реализованным сделкам" className={styles.metricCard}>{isLoading ? <Spinner size={22} /> : <div className={styles.metricValue}>{formatNumberLike(Math.round(earnedRub))} ₽</div>}</Card>
+        <Card title="Упущенный доход" subtitle="По несостоявшимся сделкам" className={styles.metricCard}>{isLoading ? <Spinner size={22} /> : <div className={styles.metricValue}>{formatNumberLike(Math.round(missedIncomeRub))} ₽</div>}</Card>
+        <Card title="Доход в отложенных сделках" subtitle="По отложенным сделкам" className={styles.metricCard}>{isLoading ? <Spinner size={22} /> : <div className={styles.metricValue}>{formatNumberLike(Math.round(delayedIncomeRub))} ₽</div>}</Card>
+      </div>
 
-            <Card
-              title="Менеджеры"
-              subtitle={`Распределение сделок (всего: ${totalDealsCount})`}
-              className={`${styles.card} ${styles.barCard}`}
-              actions={renderChartTypeSelect(chartKeys.managerCount)}
-            >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <>
-                  {getChartView(chartKeys.managerCount) !== chartTypeIds.verticalId &&
-                    getChartView(chartKeys.managerCount) !== chartTypeIds.pieId && (
-                    <div className={styles.barList} aria-label="Сделки по менеджерам">
-                      {managerCountSegments.length === 0 ? (
-                        <div className={styles.emptyInline}>Сделок пока нет</div>
-                      ) : (
-                        managerCountSegments.map((item) => (
-                          <div key={item.label} className={styles.barRow}>
-                            <div className={styles.barMeta}>
-                              <span className={styles.barLabel} title={item.label}>
-                                {item.label}
-                              </span>
-                              <span className={styles.barValue}>{formatNumberLike(item.value)}</span>
-                            </div>
-                            <div className={styles.barTrack} aria-hidden="true">
-                              <div
-                                className={styles.barFill}
-                                style={{
-                                  ["--color" as never]: item.color,
-                                  ["--size" as never]: `${
-                                    managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0
-                                  }%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+      <div className={styles.chartsGrid}>
+        <Card title="Распределение сделок по менеджерам" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.managerCount, false)}>
+          {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
+            {getChartView(chartKeys.managerCount) !== chartTypeIds.verticalId && getChartView(chartKeys.managerCount) !== chartTypeIds.pieId && <div className={styles.barList}>{managerCountSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(item.value)}</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0}%` }} /></div></div>)}</div>}
+            {getChartView(chartKeys.managerCount) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Сделки по менеджерам" emptyText="Сделок пока нет" bars={managerCountSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(item.value)}` }))} />}
+            {getChartView(chartKeys.managerCount) === chartTypeIds.pieId && <PieChart ariaLabel="Сделки по менеджерам" emptyText="Сделок пока нет" segments={managerCountSegments} />}
+          </>}
+        </Card>
 
-                  {getChartView(chartKeys.managerCount) === chartTypeIds.verticalId && (
-                    <VerticalBarChart
-                      ariaLabel="Сделки по менеджерам"
-                      emptyText="Сделок пока нет"
-                      bars={managerCountSegments.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                        color: item.color,
-                        title: `${item.label}: ${formatNumberLike(item.value)}`,
-                      }))}
-                    />
-                  )}
+        <Card title="Сумма общего дохода АВ по менеджерам" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.managerIncome, false)}>
+          {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
+            {getChartView(chartKeys.managerIncome) !== chartTypeIds.verticalId && getChartView(chartKeys.managerIncome) !== chartTypeIds.pieId && <div className={styles.barList}>{managerIncomeSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(Math.round(item.value))} ₽</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0}%` }} /></div></div>)}</div>}
+            {getChartView(chartKeys.managerIncome) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Доход по менеджерам" emptyText="Сделок пока нет" bars={managerIncomeSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽` }))} />}
+            {getChartView(chartKeys.managerIncome) === chartTypeIds.pieId && <PieChart ariaLabel="Доход по менеджерам" emptyText="Сделок пока нет" segments={managerIncomeSegments} />}
+          </>}
+        </Card>
 
-                  {getChartView(chartKeys.managerCount) === chartTypeIds.pieId && (
-                    <PieChart
-                      ariaLabel="Сделки по менеджерам (круговая диаграмма)"
-                      emptyText="Сделок пока нет"
-                      segments={toPieSegments(managerCountSegments)}
-                    />
-                  )}
-                </>
-              )}
-            </Card>
+        <Card title="Лизинговые" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.leasingAv)}>
+          {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
+            {getChartView(chartKeys.leasingAv) !== chartTypeIds.verticalId && getChartView(chartKeys.leasingAv) !== chartTypeIds.pieId && <div className={styles.barList}>{leasingSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(Math.round(item.value))} ₽ · {formatNumberLike(item.count)}</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${leasingAvMax > 0 ? Math.round((item.value / leasingAvMax) * 100) : 0}%` }} /></div></div>)}</div>}
+            {getChartView(chartKeys.leasingAv) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Лизинговые" emptyText="Сделок пока нет" bars={leasingSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽ · ${formatNumberLike(item.count)}` }))} />}
+            {getChartView(chartKeys.leasingAv) === chartTypeIds.pieId && <PieChart ariaLabel="Лизинговые" emptyText="Сделок пока нет" segments={leasingSegments} />}
+          </>}
+        </Card>
 
-            <Card
-              title="Менеджеры"
-              subtitle={`${managerIncomeTitle} (всего: ${totalDealsCount})`}
-              className={`${styles.card} ${styles.barCard}`}
-              actions={renderChartTypeSelect(chartKeys.managerIncome)}
-            >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <>
-                  {getChartView(chartKeys.managerIncome) !== chartTypeIds.verticalId &&
-                    getChartView(chartKeys.managerIncome) !== chartTypeIds.pieId && (
-                    <div className={styles.barList} aria-label="Доход по менеджерам">
-                      {managerIncomeSegments.length === 0 ? (
-                        <div className={styles.emptyInline}>Сделок пока нет</div>
-                      ) : (
-                        managerIncomeSegments.map((item) => (
-                          <div key={item.label} className={styles.barRow}>
-                            <div className={styles.barMeta}>
-                              <span className={styles.barLabel} title={item.label}>
-                                {item.label}
-                              </span>
-                              <span className={styles.barValue}>{formatNumberLike(Math.round(item.value))}</span>
-                            </div>
-                            <div className={styles.barTrack} aria-hidden="true">
-                              <div
-                                className={styles.barFill}
-                                style={{
-                                  ["--color" as never]: item.color,
-                                  ["--size" as never]: `${
-                                    managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0
-                                  }%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {getChartView(chartKeys.managerIncome) === chartTypeIds.verticalId && (
-                    <VerticalBarChart
-                      ariaLabel="Доход по менеджерам"
-                      emptyText="Сделок пока нет"
-                      bars={managerIncomeSegments.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                        color: item.color,
-                        title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽`,
-                      }))}
-                    />
-                  )}
-
-                  {getChartView(chartKeys.managerIncome) === chartTypeIds.pieId && (
-                    <PieChart
-                      ariaLabel="Доход по менеджерам (круговая диаграмма)"
-                      emptyText="Сделок пока нет"
-                      segments={toPieSegments(managerIncomeSegments)}
-                    />
-                  )}
-                </>
-              )}
-            </Card>
-          </div>
-        </div>
-
-        <div className={styles.rowFull}>
-          <div className={styles.rowGridPies} aria-label="Круговые диаграммы">
-            <Card
-              title="Этапы сделки"
-              subtitle={`АВ по этапам (всего: ${totalDealsCount})`}
-              className={`${styles.card} ${styles.pieCard} ${styles.stagePieCard}`}
-              actions={renderChartTypeSelect(chartKeys.stageAv)}
-            >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <>
-                  {getChartView(chartKeys.stageAv) !== chartTypeIds.verticalId &&
-                    getChartView(chartKeys.stageAv) !== chartTypeIds.pieId && (
-                    <div className={styles.barList} aria-label="АВ по этапам сделки">
-                      {stageSegments.length === 0 ? (
-                        <div className={styles.emptyInline}>Сделок пока нет</div>
-                      ) : (
-                        stageSegments.map((item) => (
-                          <div key={item.label} className={styles.barRow}>
-                            <div className={styles.barMeta}>
-                              <span className={styles.barLabel} title={item.label}>
-                                {item.label}
-                              </span>
-                              <span className={styles.barValue}>
-                                {formatNumberLike(Math.round(item.value))} ₽ · {formatNumberLike(item.count)} сделок
-                              </span>
-                            </div>
-                            <div className={styles.barTrack} aria-hidden="true">
-                              <div
-                                className={styles.barFill}
-                                style={{
-                                  ["--color" as never]: item.color,
-                                  ["--size" as never]: `${
-                                    stageAvMax > 0 ? Math.round((item.value / stageAvMax) * 100) : 0
-                                  }%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {getChartView(chartKeys.stageAv) === chartTypeIds.verticalId && (
-                    <VerticalBarChart
-                      ariaLabel="АВ по этапам сделки"
-                      emptyText="Сделок пока нет"
-                      bars={stageSegments.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                        color: item.color,
-                        title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽ · ${formatNumberLike(item.count)} сделок`,
-                      }))}
-                    />
-                  )}
-
-                  {getChartView(chartKeys.stageAv) === chartTypeIds.pieId && (
-                    <PieChart
-                      ariaLabel="АВ по этапам сделки (круговая диаграмма)"
-                      emptyText="Сделок пока нет"
-                      segments={stageSegments}
-                    />
-                  )}
-                </>
-              )}
-            </Card>
-
-            <Card
-              title="Лизинговые"
-              subtitle={`АВ по лизинговым (всего: ${totalDealsCount})`}
-              className={`${styles.card} ${styles.pieCard}`}
-              actions={renderChartTypeSelect(chartKeys.leasingAv)}
-            >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <>
-                  {getChartView(chartKeys.leasingAv) !== chartTypeIds.verticalId &&
-                    getChartView(chartKeys.leasingAv) !== chartTypeIds.pieId && (
-                    <div className={styles.barList} aria-label="АВ по лизинговым компаниям">
-                      {leasingSegments.length === 0 ? (
-                        <div className={styles.emptyInline}>Сделок пока нет</div>
-                      ) : (
-                        leasingSegments.map((item) => (
-                          <div key={item.label} className={styles.barRow}>
-                            <div className={styles.barMeta}>
-                              <span className={styles.barLabel} title={item.label}>
-                                {item.label}
-                              </span>
-                              <span className={styles.barValue}>
-                                {formatNumberLike(Math.round(item.value))} ₽ · {formatNumberLike(item.count)} сделок
-                              </span>
-                            </div>
-                            <div className={styles.barTrack} aria-hidden="true">
-                              <div
-                                className={styles.barFill}
-                                style={{
-                                  ["--color" as never]: item.color,
-                                  ["--size" as never]: `${
-                                    leasingAvMax > 0 ? Math.round((item.value / leasingAvMax) * 100) : 0
-                                  }%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {getChartView(chartKeys.leasingAv) === chartTypeIds.verticalId && (
-                    <VerticalBarChart
-                      ariaLabel="АВ по лизинговым компаниям"
-                      emptyText="Сделок пока нет"
-                      bars={leasingSegments.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                        color: item.color,
-                        title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽ · ${formatNumberLike(item.count)} сделок`,
-                      }))}
-                    />
-                  )}
-
-                  {getChartView(chartKeys.leasingAv) === chartTypeIds.pieId && (
-                    <PieChart
-                      ariaLabel="АВ по лизинговым компаниям (круговая диаграмма)"
-                      emptyText="Сделок пока нет"
-                      segments={toPieSegments(leasingSegments)}
-                    />
-                  )}
-                </>
-              )}
-            </Card>
-          </div>
-        </div>
+        <Card title="Этапы сделки" subtitle="Все сделки" className={styles.chartCard} actions={renderChartActions(chartKeys.stageAv)}>
+          {isLoading ? <div className={styles.loading}><Spinner size={24} /><div className={styles.loadingText}>Загрузка...</div></div> : <>
+            {getChartView(chartKeys.stageAv) !== chartTypeIds.verticalId && getChartView(chartKeys.stageAv) !== chartTypeIds.pieId && <div className={styles.barList}>{stageSegments.map((item) => <div key={item.label} className={styles.barRow}><div className={styles.barMeta}><span className={styles.barLabel}>{item.label}</span><span className={styles.barValue}>{formatNumberLike(Math.round(item.value))} ₽ · {formatNumberLike(item.count)}</span></div><div className={styles.barTrack}><div className={styles.barFill} style={{ ["--color" as never]: item.color, ["--size" as never]: `${stageAvMax > 0 ? Math.round((item.value / stageAvMax) * 100) : 0}%` }} /></div></div>)}</div>}
+            {getChartView(chartKeys.stageAv) === chartTypeIds.verticalId && <VerticalBarChart ariaLabel="Этапы сделки" emptyText="Сделок пока нет" bars={stageSegments.map((item) => ({ label: item.label, value: item.value, color: item.color, title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽ · ${formatNumberLike(item.count)}` }))} />}
+            {getChartView(chartKeys.stageAv) === chartTypeIds.pieId && <PieChart ariaLabel="Этапы сделки" emptyText="Сделок пока нет" segments={stageSegments} />}
+          </>}
+        </Card>
       </div>
     </div>
   );
