@@ -4,6 +4,13 @@
   gap: 16px;
 }
 
+.filtersRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
 .statusNav {
   display: flex;
   flex-wrap: wrap;
@@ -166,14 +173,16 @@
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .barLabel {
   font-weight: 650;
   color: rgba(15, 23, 42, 0.88);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  word-break: break-word;
   min-width: 0;
 }
 
@@ -215,6 +224,22 @@
 
 .barCard {
   align-self: stretch;
+}
+
+.chartSelect {
+  font: inherit;
+  font-weight: 650;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 224, 234, 0.9);
+  background: rgba(241, 245, 249, 0.35);
+  color: rgba(15, 23, 42, 0.9);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.chartSelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .incomeNumber {
@@ -270,10 +295,16 @@
 }
 
 @media (min-width: 920px) {
+  .filtersRow {
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+  }
+
   .periodRow {
     grid-template-columns: repeat(2, minmax(0, 260px));
     align-items: end;
     gap: 16px;
+    justify-content: end;
   }
 
   .grid {

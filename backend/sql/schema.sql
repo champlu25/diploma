@@ -104,6 +104,19 @@ CREATE TABLE deals (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE chart_types (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE CHECK (char_length(trim(name)) > 0 AND char_length(trim(name)) <= 160)
+);
+
+CREATE TABLE user_chart_view_settings (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chart_key TEXT NOT NULL CHECK (chart_key ~ '^[a-z0-9_]+$' AND char_length(chart_key) BETWEEN 1 AND 80),
+  chart_type_id BIGINT NOT NULL REFERENCES chart_types(id) ON DELETE RESTRICT,
+  UNIQUE (user_id, chart_key)
+);
+
 CREATE INDEX idx_users_role_id ON users(role_id);
 CREATE INDEX idx_users_group_lead_user_id ON users(group_lead_user_id);
 CREATE INDEX idx_companies_manager_user_id ON companies(manager_user_id);
@@ -116,6 +129,8 @@ CREATE INDEX idx_deals_deal_status_id ON deals(deal_status_id);
 CREATE INDEX idx_deals_deal_lifecycle_status_id ON deals(deal_lifecycle_status_id);
 CREATE INDEX idx_deals_deal_stage_id ON deals(deal_stage_id);
 CREATE INDEX idx_deals_leasing_company_id ON deals(leasing_company_id);
+CREATE INDEX idx_user_chart_view_settings_user_id ON user_chart_view_settings(user_id);
+CREATE INDEX idx_user_chart_view_settings_chart_type_id ON user_chart_view_settings(chart_type_id);
 
 CREATE TRIGGER trg_users_set_updated_at
 BEFORE UPDATE ON users
@@ -189,4 +204,10 @@ INSERT INTO deal_stages (name) VALUES
 ('Выдача'),
 ('Ожидание АВ'),
 ('АВ Получено')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO chart_types (name) VALUES
+('Горизонтальный'),
+('Вертикальный'),
+('Круговой')
 ON CONFLICT (name) DO NOTHING;

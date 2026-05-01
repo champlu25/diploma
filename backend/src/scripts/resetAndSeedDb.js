@@ -173,30 +173,34 @@ const seedTestData = async (client) => {
   const owner = await insertUser(client, {
     ...credentials.owner,
     roleId: ownerRoleId,
-    lastName: "Владелец",
-    firstName: "Системы",
+    lastName: "Иванов",
+    firstName: "Иван",
+    middleName: "Иванович",
   });
 
   const groupLead = await insertUser(client, {
     ...credentials.groupLead,
     roleId: groupLeadRoleId,
-    lastName: "Руководитель",
-    firstName: "Группы",
+    lastName: "Петров",
+    firstName: "Пётр",
+    middleName: "Петрович",
   });
 
   const manager1 = await insertUser(client, {
     ...credentials.manager1,
     roleId: managerRoleId,
-    lastName: "Менеджер",
-    firstName: "Первый",
+    lastName: "Сидоров",
+    firstName: "Сергей",
+    middleName: "Сергеевич",
     groupLeadUserId: groupLead.id,
   });
 
   const manager2 = await insertUser(client, {
     ...credentials.manager2,
     roleId: managerRoleId,
-    lastName: "Менеджер",
-    firstName: "Второй",
+    lastName: "Кузнецова",
+    firstName: "Анна",
+    middleName: "Викторовна",
     groupLeadUserId: groupLead.id,
   });
 

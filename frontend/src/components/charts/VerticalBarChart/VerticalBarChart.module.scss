@@ -1,0 +1,67 @@
+.root {
+  width: 100%;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  overflow-x: auto;
+  padding: 6px 2px 2px;
+  min-height: calc(var(--h) + 64px);
+}
+
+.barItem {
+  min-width: 72px;
+  max-width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.barTrack {
+  width: 100%;
+  height: var(--h);
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.barFill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--size);
+  background: var(--color);
+  border-radius: 10px;
+}
+
+.value {
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(15, 23, 42, 0.7);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.barLabel {
+  width: 100%;
+  font-size: 11px;
+  line-height: 1.1;
+  color: rgba(15, 23, 42, 0.7);
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.empty {
+  padding: 12px 8px;
+  color: rgba(15, 23, 42, 0.6);
+  font-size: 14px;
+}
