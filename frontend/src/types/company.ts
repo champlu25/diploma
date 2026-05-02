@@ -13,14 +13,6 @@ export interface Company {
   updatedAt: string;
 }
 
-export interface CompanyRequisites {
-  id: number;
-  name: string;
-  bik: string;
-  rs: string;
-  ks: string;
-}
-
 export interface CompanyDetails extends Company {
   legalAddress: string | null;
   actualAddress: string | null;

@@ -75,31 +75,6 @@ export const resetUserPassword = async (
   return data;
 };
 
-interface AssignGroupLeadResponse {
-  message: string;
-  user: User;
-}
-
-interface AssignGroupLeadDtoResponse {
-  message: string;
-  user: UserDto;
-}
-
-export const assignManagerToGroupLead = async (
-  userId: number,
-  groupLeadUserId: number | null,
-): Promise<AssignGroupLeadResponse> => {
-  const { data } = await httpClient.patch<AssignGroupLeadDtoResponse>(
-    `/api/owner/users/${userId}/group-lead`,
-    { groupLeadUserId },
-  );
-
-  return {
-    ...data,
-    user: toUser(data.user),
-  };
-};
-
 interface GroupManagerDto {
   id: number;
   username: string;

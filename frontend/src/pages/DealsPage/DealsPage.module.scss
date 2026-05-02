@@ -144,29 +144,6 @@
   opacity: 0.65;
 }
 
-.cellInput,
-.cellSelect,
-.cellTextarea {
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.7);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.98);
-  padding: 8px 10px;
-  font: inherit;
-  color: inherit;
-  outline: none;
-}
-
-.cellTextarea {
-  resize: vertical;
-  min-height: 44px;
-}
-
-.cellError {
-  border-color: rgba(220, 38, 38, 0.55);
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08);
-}
-
 .muted {
   color: var(--color-text-secondary);
   font-weight: 500;
