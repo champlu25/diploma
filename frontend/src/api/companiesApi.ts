@@ -107,7 +107,7 @@ const toCompanyDetails = (dto: CompanyDto): CompanyDetails => ({
   actualAddress: dto.actual_address ?? null,
   directorBirthDate: dto.director_birth_date ?? null,
   activity: dto.activity ?? null,
-  revenueRub: typeof dto.revenue_rub === "number" ? dto.revenue_rub : dto.revenue_rub ?? null,
+  revenueRub: typeof dto.revenue_rub === "number" ? dto.revenue_rub : (dto.revenue_rub ?? null),
   negativeInfo: dto.negative_info ?? null,
   bik: dto.bik ?? null,
   rs: dto.rs ?? null,

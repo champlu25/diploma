@@ -98,7 +98,10 @@ export const getDealLookups = async (): Promise<DealLookups> => {
   return data;
 };
 
-export const createDeal = async (companyId: number, values: DealFormValues): Promise<DealResponse> => {
+export const createDeal = async (
+  companyId: number,
+  values: DealFormValues,
+): Promise<DealResponse> => {
   const { data } = await httpClient.post<DealDtoResponse>(
     `/api/companies/${companyId}/deals`,
     toPayload(values),
@@ -111,7 +114,10 @@ export const createDeal = async (companyId: number, values: DealFormValues): Pro
 };
 
 export const updateDeal = async (dealId: number, values: DealFormValues): Promise<DealResponse> => {
-  const { data } = await httpClient.patch<DealDtoResponse>(`/api/deals/${dealId}`, toPayload(values));
+  const { data } = await httpClient.patch<DealDtoResponse>(
+    `/api/deals/${dealId}`,
+    toPayload(values),
+  );
   return {
     ...data,
     deal: toDeal(data.deal),
@@ -127,9 +133,12 @@ export const updateDealLifecycleStatus = async (
   dealId: number,
   dealLifecycleStatusId: number,
 ): Promise<DealResponse> => {
-  const { data } = await httpClient.patch<DealDtoResponse>(`/api/deals/${dealId}/lifecycle-status`, {
-    dealLifecycleStatusId,
-  });
+  const { data } = await httpClient.patch<DealDtoResponse>(
+    `/api/deals/${dealId}/lifecycle-status`,
+    {
+      dealLifecycleStatusId,
+    },
+  );
 
   return {
     ...data,

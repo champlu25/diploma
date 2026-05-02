@@ -6,10 +6,7 @@ interface AuthResponse {
   user: CurrentUser;
 }
 
-export const login = async (
-  username: string,
-  password: string,
-): Promise<CurrentUser> => {
+export const login = async (username: string, password: string): Promise<CurrentUser> => {
   const { data } = await httpClient.post<AuthResponse>("/api/auth/login", {
     username,
     password,

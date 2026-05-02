@@ -4,17 +4,13 @@ interface ErrorPayload {
   message?: unknown;
 }
 
-export const getApiErrorMessage = (
-  error: unknown,
-  fallbackMessage: string,
-): string => {
+export const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => {
   if (!axios.isAxiosError(error)) {
     return fallbackMessage;
   }
 
   const payload = error.response?.data as ErrorPayload | undefined;
-  const responseMessage =
-    typeof payload?.message === "string" ? payload.message.trim() : "";
+  const responseMessage = typeof payload?.message === "string" ? payload.message.trim() : "";
 
   if (responseMessage) {
     return responseMessage;

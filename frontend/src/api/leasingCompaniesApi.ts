@@ -21,26 +21,43 @@ interface UpdateLeasingCompanyResponse {
 }
 
 export const getOwnerLeasingCompanies = async (): Promise<LeasingCompany[]> => {
-  const { data } = await httpClient.get<GetLeasingCompaniesResponse>("/api/owner/leasing-companies");
+  const { data } = await httpClient.get<GetLeasingCompaniesResponse>(
+    "/api/owner/leasing-companies",
+  );
   return data.leasingCompanies;
 };
 
 export const createOwnerLeasingCompany = async (name: string): Promise<LeasingCompany> => {
-  const { data } = await httpClient.post<CreateLeasingCompanyResponse>("/api/owner/leasing-companies", { name });
+  const { data } = await httpClient.post<CreateLeasingCompanyResponse>(
+    "/api/owner/leasing-companies",
+    { name },
+  );
   return data.leasingCompany;
 };
 
-export const updateOwnerLeasingCompany = async (id: number, name: string): Promise<LeasingCompany> => {
-  const { data } = await httpClient.patch<UpdateLeasingCompanyResponse>(`/api/owner/leasing-companies/${id}`, {
-    name,
-  });
+export const updateOwnerLeasingCompany = async (
+  id: number,
+  name: string,
+): Promise<LeasingCompany> => {
+  const { data } = await httpClient.patch<UpdateLeasingCompanyResponse>(
+    `/api/owner/leasing-companies/${id}`,
+    {
+      name,
+    },
+  );
   return data.leasingCompany;
 };
 
-export const setOwnerLeasingCompanyActive = async (id: number, isActive: boolean): Promise<LeasingCompany> => {
-  const { data } = await httpClient.patch<UpdateLeasingCompanyResponse>(`/api/owner/leasing-companies/${id}`, {
-    isActive,
-  });
+export const setOwnerLeasingCompanyActive = async (
+  id: number,
+  isActive: boolean,
+): Promise<LeasingCompany> => {
+  const { data } = await httpClient.patch<UpdateLeasingCompanyResponse>(
+    `/api/owner/leasing-companies/${id}`,
+    {
+      isActive,
+    },
+  );
   return data.leasingCompany;
 };
 

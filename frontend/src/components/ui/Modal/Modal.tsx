@@ -14,14 +14,7 @@ export interface ModalProps {
   closeable?: boolean;
 }
 
-export function Modal({
-  open,
-  title,
-  onClose,
-  children,
-  className,
-  closeable = true,
-}: ModalProps) {
+export function Modal({ open, title, onClose, children, className, closeable = true }: ModalProps) {
   useEffect(() => {
     if (!open || !closeable) return;
 
@@ -46,11 +39,19 @@ export function Modal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className={clsx(styles.panel, className)} onMouseDown={(event) => event.stopPropagation()}>
+      <section
+        className={clsx(styles.panel, className)}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <header className={styles.header}>
           <div className={styles.title}>{title ?? "Окно"}</div>
           {closeable && (
-            <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Закрыть">
+            <button
+              type="button"
+              className={styles.closeButton}
+              onClick={onClose}
+              aria-label="Закрыть"
+            >
               <Icon name="x" size={18} />
             </button>
           )}
@@ -61,4 +62,3 @@ export function Modal({
     document.body,
   );
 }
-

@@ -21,7 +21,9 @@ interface SaveChartViewSettingResponse {
 }
 
 export const getChartViewSettings = async (): Promise<GetChartViewSettingsResponse> => {
-  const { data } = await httpClient.get<GetChartViewSettingsResponse>("/api/dashboards/chart-view-settings");
+  const { data } = await httpClient.get<GetChartViewSettingsResponse>(
+    "/api/dashboards/chart-view-settings",
+  );
   return data;
 };
 

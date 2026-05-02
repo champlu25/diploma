@@ -7,7 +7,9 @@
   align-items: center;
   justify-content: center;
   color: var(--color-accent);
-  transition: background-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
 .neutral {

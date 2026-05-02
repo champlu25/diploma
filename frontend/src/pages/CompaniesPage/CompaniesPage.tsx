@@ -19,7 +19,12 @@ import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
-import { InputField, SelectField, TextAreaField, type SelectFieldOption } from "../../components/ui/Field/Field";
+import {
+  InputField,
+  SelectField,
+  TextAreaField,
+  type SelectFieldOption,
+} from "../../components/ui/Field/Field";
 import { IconButton } from "../../components/ui/IconButton/IconButton";
 import { Icon } from "../../components/ui/Icon/Icon";
 import { Modal } from "../../components/ui/Modal/Modal";
@@ -312,10 +317,12 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     taxSystems: { id: number; name: string }[];
     communicationChannels: { id: number; name: string }[];
   } | null>(null);
-  const [communicationChannelOptions, setCommunicationChannelOptions] = useState<SelectFieldOption[]>([
+  const [communicationChannelOptions, setCommunicationChannelOptions] = useState<
+    SelectFieldOption[]
+  >([{ value: "", label: "—" }]);
+  const [taxSystemOptions, setTaxSystemOptions] = useState<SelectFieldOption[]>([
     { value: "", label: "—" },
   ]);
-  const [taxSystemOptions, setTaxSystemOptions] = useState<SelectFieldOption[]>([{ value: "", label: "—" }]);
 
   const [creatingDealCompanyId, setCreatingDealCompanyId] = useState<number | null>(null);
   const [dealLookups, setDealLookups] = useState<DealLookups | null>(null);
@@ -360,11 +367,17 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         if (isCancelled) return;
         setCompanyLookups({
           taxSystems: lookups.taxSystems.map((t) => ({ id: t.id, name: t.name })),
-          communicationChannels: lookups.communicationChannels.map((c) => ({ id: c.id, name: c.name })),
+          communicationChannels: lookups.communicationChannels.map((c) => ({
+            id: c.id,
+            name: c.name,
+          })),
         });
         setCommunicationChannelOptions([
           { value: "", label: "—" },
-          ...lookups.communicationChannels.map((item) => ({ value: String(item.id), label: item.name })),
+          ...lookups.communicationChannels.map((item) => ({
+            value: String(item.id),
+            label: item.name,
+          })),
         ]);
         setTaxSystemOptions([
           { value: "", label: "—" },
@@ -439,7 +452,10 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         if (!isCancelled) {
           setManagerFilterOptions([
             { value: "", label: "Все менеджеры" },
-            { value: String(currentUser.id), label: "\u041c\u043e\u0438 \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438" },
+            {
+              value: String(currentUser.id),
+              label: "\u041c\u043e\u0438 \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
+            },
           ]);
         }
       }
@@ -520,11 +536,17 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         if (!companyLookups) {
           setCompanyLookups({
             taxSystems: lookups.taxSystems.map((t) => ({ id: t.id, name: t.name })),
-            communicationChannels: lookups.communicationChannels.map((c) => ({ id: c.id, name: c.name })),
+            communicationChannels: lookups.communicationChannels.map((c) => ({
+              id: c.id,
+              name: c.name,
+            })),
           });
           setCommunicationChannelOptions([
             { value: "", label: "—" },
-            ...lookups.communicationChannels.map((item) => ({ value: String(item.id), label: item.name })),
+            ...lookups.communicationChannels.map((item) => ({
+              value: String(item.id),
+              label: item.name,
+            })),
           ]);
           setTaxSystemOptions([
             { value: "", label: "—" },
@@ -551,9 +573,12 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           bik: companyDetails.bik ?? "",
           rs: companyDetails.rs ?? "",
           ks: companyDetails.ks ?? "",
-          taxSystemId: companyDetails.taxSystemId === null ? "" : String(companyDetails.taxSystemId),
+          taxSystemId:
+            companyDetails.taxSystemId === null ? "" : String(companyDetails.taxSystemId),
           preferredCommunicationChannelId:
-            companyDetails.preferredCommunicationChannelId === null ? "" : String(companyDetails.preferredCommunicationChannelId),
+            companyDetails.preferredCommunicationChannelId === null
+              ? ""
+              : String(companyDetails.preferredCommunicationChannelId),
         });
       } catch (requestError) {
         setError(getApiErrorMessage(requestError, "Не удалось загрузить данные компании."));
@@ -587,7 +612,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setIsEditSubmitting(true);
       setError(null);
       const result = await updateCompany(editingCompany.id, editForm);
-      setCompanies((prev) => prev.map((item) => (item.id === editingCompany.id ? result.company : item)));
+      setCompanies((prev) =>
+        prev.map((item) => (item.id === editingCompany.id ? result.company : item)),
+      );
       closeEditModal();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить компанию."));
@@ -820,169 +847,151 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       <DataTable>
         <thead>
           <Tr>
-              <Th style={{ width: showManagerColumn ? "13%" : "22%" }}>
-                Наименование
-              </Th>
-              {showManagerColumn && (
-                <Th style={{ width: "10%" }}>
-                  Менеджер
-                </Th>
-              )}
-              <Th style={{ width: "9%" }}>
-                ИНН
-              </Th>
-              <Th style={{ width: "10%" }}>
-                Контакт
-              </Th>
-              <Th style={{ width: "9%" }}>
-                Телефон
-              </Th>
-              <Th style={{ width: "15%" }}>
-                Почта
-              </Th>
-              <Th style={{ width: "13%" }}>
-                Комментарий
-              </Th>
-              <Th style={{ width: "11%" }}>
-                Связаться
-              </Th>
-              <Th style={{ width: "12%" }}>
-                Создано
-              </Th>
-              <Th style={{ width: "12%" }}>
-                Обновлено
-              </Th>
-              <Th style={{ width: "10%", textAlign: "left" }}>
-                Действия
-              </Th>
-            </Tr>
-          </thead>
-          <tbody>
-            {filteredCompanies.map((company) => {
-              const canManage = canManageCompany(company);
-              const isDeleteSubmitting = isDeleteSubmittingId === company.id;
-              const contact = formatContactDate(company.nextContactAt);
+            <Th style={{ width: showManagerColumn ? "13%" : "22%" }}>Наименование</Th>
+            {showManagerColumn && <Th style={{ width: "10%" }}>Менеджер</Th>}
+            <Th style={{ width: "9%" }}>ИНН</Th>
+            <Th style={{ width: "10%" }}>Контакт</Th>
+            <Th style={{ width: "9%" }}>Телефон</Th>
+            <Th style={{ width: "15%" }}>Почта</Th>
+            <Th style={{ width: "13%" }}>Комментарий</Th>
+            <Th style={{ width: "11%" }}>Связаться</Th>
+            <Th style={{ width: "12%" }}>Создано</Th>
+            <Th style={{ width: "12%" }}>Обновлено</Th>
+            <Th style={{ width: "10%", textAlign: "left" }}>Действия</Th>
+          </Tr>
+        </thead>
+        <tbody>
+          {filteredCompanies.map((company) => {
+            const canManage = canManageCompany(company);
+            const isDeleteSubmitting = isDeleteSubmittingId === company.id;
+            const contact = formatContactDate(company.nextContactAt);
 
-              return (
-                <Tr key={company.id}>
-                  <Td>
-                    <button
-                      type="button"
-                      className={styles.companyLink}
-                      onClick={() => navigate(`/companies/${company.id}`)}
-                      title="Открыть карточку компании"
-                    >
-                      {company.name}
-                    </button>
-                  </Td>
+            return (
+              <Tr key={company.id}>
+                <Td>
+                  <button
+                    type="button"
+                    className={styles.companyLink}
+                    onClick={() => navigate(`/companies/${company.id}`)}
+                    title="Открыть карточку компании"
+                  >
+                    {company.name}
+                  </button>
+                </Td>
 
-                  {showManagerColumn && <Td>{company.managerName}</Td>}
+                {showManagerColumn && <Td>{company.managerName}</Td>}
 
-                  <Td>
-                    {company.inn}
-                  </Td>
+                <Td>{company.inn}</Td>
 
-                  <Td>
-                    {company.contactName || "—"}
-                  </Td>
+                <Td>{company.contactName || "—"}</Td>
 
-                  <Td>
-                    {company.phone || "—"}
-                  </Td>
+                <Td>{company.phone || "—"}</Td>
 
-                  <Td>
-                    {company.email || "—"}
-                  </Td>
+                <Td>{company.email || "—"}</Td>
 
-                  <Td>
-                    {company.comment || "—"}
-                  </Td>
+                <Td>{company.comment || "—"}</Td>
 
-                  <Td>
-                    {contact.text === "—" ? (
-                      <span className={styles.muted}>—</span>
-                    ) : (
-                      <div className={styles.contact}>
-                        <div className={styles.contactDate}>{contact.text}</div>
-                        {contact.statusText && contact.tone && (
-                          <div
-                            className={`${styles.contactStatus} ${
-                              contact.tone === "overdue"
-                                ? styles.statusOverdue
-                                : contact.tone === "soon"
-                                  ? styles.statusSoon
-                                  : styles.statusFuture
-                            }`}
+                <Td>
+                  {contact.text === "—" ? (
+                    <span className={styles.muted}>—</span>
+                  ) : (
+                    <div className={styles.contact}>
+                      <div className={styles.contactDate}>{contact.text}</div>
+                      {contact.statusText && contact.tone && (
+                        <div
+                          className={`${styles.contactStatus} ${
+                            contact.tone === "overdue"
+                              ? styles.statusOverdue
+                              : contact.tone === "soon"
+                                ? styles.statusSoon
+                                : styles.statusFuture
+                          }`}
+                        >
+                          {contact.statusText}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Td>
+
+                <Td>{formatDateTime(company.createdAt)}</Td>
+                <Td>{formatDateTime(company.updatedAt)}</Td>
+
+                <Td style={{ textAlign: "center" }}>
+                  {canManage ? (
+                    <div className={styles.actions}>
+                      <>
+                        <div className={styles.actionRow}>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => {
+                              const params = new URLSearchParams({
+                                companyId: String(company.id),
+                              });
+                              navigate(`/deals?${params.toString()}`, {
+                                state: { companyName: company.name },
+                              });
+                            }}
+                            title="Перейти к сделкам компании"
                           >
-                            {contact.statusText}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </Td>
-
-                  <Td>{formatDateTime(company.createdAt)}</Td>
-                  <Td>{formatDateTime(company.updatedAt)}</Td>
-
-                  <Td style={{ textAlign: "center" }}>
-                    {canManage ? (
-                      <div className={styles.actions}>
-                        <>
-                          <div className={styles.actionRow}>
+                            <Icon name="arrowRight" size={18} />
+                          </IconButton>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => openCreateDealModal(company)}
+                            title="Создать сделку"
+                          >
+                            <Icon name="plus" size={18} />
+                          </IconButton>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => openEditModal(company)}
+                            title="Редактировать"
+                          >
+                            <Icon name="edit" size={18} />
+                          </IconButton>
+                        </div>
+                        <div className={styles.actionRow}>
+                          {canTransferCompanies && (
                             <IconButton
                               tone="neutral"
-                              onClick={() => {
-                                const params = new URLSearchParams({
-                                  companyId: String(company.id),
-                                });
-                                navigate(`/deals?${params.toString()}`, {
-                                  state: { companyName: company.name },
-                                });
-                              }}
-                              title="Перейти к сделкам компании"
+                              onClick={() => void openTransferModal(company)}
+                              title="Передать"
                             >
-                              <Icon name="arrowRight" size={18} />
+                              <Icon name="users" size={18} />
                             </IconButton>
-                            <IconButton tone="neutral" onClick={() => openCreateDealModal(company)} title="Создать сделку">
-                              <Icon name="plus" size={18} />
-                            </IconButton>
-                            <IconButton tone="neutral" onClick={() => openEditModal(company)} title="Редактировать">
-                              <Icon name="edit" size={18} />
-                            </IconButton>
-                          </div>
-                          <div className={styles.actionRow}>
-                            {canTransferCompanies && (
-                              <IconButton tone="neutral" onClick={() => void openTransferModal(company)} title="Передать">
-                                <Icon name="users" size={18} />
-                              </IconButton>
+                          )}
+                          <IconButton
+                            onClick={() => void handleDelete(company)}
+                            disabled={isDeleteSubmitting}
+                            title="Удалить"
+                            tone="danger"
+                          >
+                            {isDeleteSubmitting ? (
+                              <Spinner size={18} />
+                            ) : (
+                              <Icon name="trash" size={18} />
                             )}
-                            <IconButton
-                              onClick={() => void handleDelete(company)}
-                              disabled={isDeleteSubmitting}
-                              title="Удалить"
-                              tone="danger"
-                            >
-                              {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
-                            </IconButton>
-                          </div>
-                        </>
-                      </div>
-                    ) : (
-                      <span className={styles.muted}>—</span>
-                    )}
-                  </Td>
-                </Tr>
-              );
-            })}
+                          </IconButton>
+                        </div>
+                      </>
+                    </div>
+                  ) : (
+                    <span className={styles.muted}>—</span>
+                  )}
+                </Td>
+              </Tr>
+            );
+          })}
 
-              {filteredCompanies.length === 0 && (
-                <Tr>
-                  <Td colSpan={showManagerColumn ? 11 : 10} style={{ textAlign: "center" }}>
-                    <span className={styles.muted}>Компаний нет</span>
-                  </Td>
-                </Tr>
-              )}
-            </tbody>
+          {filteredCompanies.length === 0 && (
+            <Tr>
+              <Td colSpan={showManagerColumn ? 11 : 10} style={{ textAlign: "center" }}>
+                <span className={styles.muted}>Компаний нет</span>
+              </Td>
+            </Tr>
+          )}
+        </tbody>
       </DataTable>
 
       {isLoading && (
@@ -1023,7 +1032,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           <InputField
             label="Контактное лицо"
             value={createForm.contactName}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, contactName: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, contactName: event.target.value }))
+            }
             disabled={isCreateSubmitting}
           />
 
@@ -1046,21 +1057,27 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Связаться"
             type="datetime-local"
             value={createForm.nextContactAt}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, nextContactAt: event.target.value }))
+            }
             disabled={isCreateSubmitting}
           />
 
           <InputField
             label="Юридический адрес"
             value={createForm.legalAddress}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, legalAddress: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, legalAddress: event.target.value }))
+            }
             disabled={isCreateSubmitting}
           />
 
           <InputField
             label="Фактический адрес"
             value={createForm.actualAddress}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, actualAddress: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, actualAddress: event.target.value }))
+            }
             disabled={isCreateSubmitting}
           />
 
@@ -1068,14 +1085,18 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="День рождения директора"
             type="date"
             value={createForm.directorBirthDate}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))
+            }
             disabled={isCreateSubmitting}
           />
 
           <TextAreaField
             label="Вид деятельности"
             value={createForm.activity}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, activity: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, activity: event.target.value }))
+            }
             disabled={isCreateSubmitting}
             rows={3}
           />
@@ -1083,7 +1104,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           <InputField
             label="Выручка, ₽"
             value={createForm.revenueRub}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, revenueRub: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, revenueRub: event.target.value }))
+            }
             disabled={isCreateSubmitting}
             error={createErrors.revenueRub}
             inputMode="numeric"
@@ -1092,7 +1115,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           <TextAreaField
             label="Выявленный негатив"
             value={createForm.negativeInfo}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, negativeInfo: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, negativeInfo: event.target.value }))
+            }
             disabled={isCreateSubmitting}
             rows={3}
           />
@@ -1101,7 +1126,10 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Предпочитает общение через"
             value={createForm.preferredCommunicationChannelId}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, preferredCommunicationChannelId: event.target.value }))
+              setCreateForm((prev) => ({
+                ...prev,
+                preferredCommunicationChannelId: event.target.value,
+              }))
             }
             options={communicationChannelOptions}
             disabled={isCreateSubmitting}
@@ -1110,7 +1138,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           <SelectField
             label="Система налогообложения"
             value={createForm.taxSystemId}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, taxSystemId: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, taxSystemId: event.target.value }))
+            }
             options={taxSystemOptions}
             disabled={isCreateSubmitting}
           />
@@ -1142,7 +1172,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           <TextAreaField
             label="Комментарий"
             value={createForm.comment}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, comment: event.target.value }))}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, comment: event.target.value }))
+            }
             disabled={isCreateSubmitting}
             rows={4}
           />
@@ -1193,7 +1225,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <InputField
               label="Контактное лицо"
               value={editForm.contactName}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, contactName: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, contactName: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
@@ -1216,18 +1250,21 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="Связаться"
               type="datetime-local"
               value={editForm.nextContactAt}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
             <TextAreaField
               label="Комментарий"
               value={editForm.comment}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, comment: event.target.value }))
+              }
               disabled={isEditSubmitting}
               rows={4}
             />
-
 
             <div className={styles.modalActions}>
               <Button type="submit" disabled={isEditSubmitting}>
@@ -1240,7 +1277,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
       <Modal
         open={Boolean(creatingDealCompany)}
-        title={creatingDealCompany ? `Создать сделку — ${creatingDealCompany.name}` : "Создать сделку"}
+        title={
+          creatingDealCompany ? `Создать сделку — ${creatingDealCompany.name}` : "Создать сделку"
+        }
         onClose={closeCreateDealModal}
       >
         {creatingDealCompany && (
@@ -1258,7 +1297,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <SelectField
               label="Статус"
               value={dealForm.dealStatusId}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, dealStatusId: event.target.value }))}
+              onChange={(event) =>
+                setDealForm((prev) => ({ ...prev, dealStatusId: event.target.value }))
+              }
               required
               error={dealErrors.dealStatusId}
               disabled={isDealSubmitting || !dealLookups}
@@ -1268,7 +1309,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <InputField
               label="Стоимость ПЛ, ₽"
               value={dealForm.plCostRub}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, plCostRub: event.target.value }))}
+              onChange={(event) =>
+                setDealForm((prev) => ({ ...prev, plCostRub: event.target.value }))
+              }
               required
               error={dealErrors.plCostRub}
               disabled={isDealSubmitting}
@@ -1278,7 +1321,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <SelectField
               label="Лизинговая"
               value={dealForm.leasingCompanyId}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))}
+              onChange={(event) =>
+                setDealForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))
+              }
               required
               error={dealErrors.leasingCompanyId}
               disabled={isDealSubmitting || !dealLookups}
@@ -1288,7 +1333,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <InputField
               label="АВ, %"
               value={dealForm.agentFeePercent}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))}
+              onChange={(event) =>
+                setDealForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))
+              }
               required
               error={dealErrors.agentFeePercent}
               disabled={isDealSubmitting}
@@ -1299,7 +1346,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="АВ, руб."
               value={String(
                 Math.round(
-                  (Number(dealForm.plCostRub) || 0) * ((Number(dealForm.agentFeePercent) || 0) / 100),
+                  (Number(dealForm.plCostRub) || 0) *
+                    ((Number(dealForm.agentFeePercent) || 0) / 100),
                 ),
               )}
               disabled
@@ -1309,7 +1357,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <SelectField
               label="Этап сделки"
               value={dealForm.dealStageId}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, dealStageId: event.target.value }))}
+              onChange={(event) =>
+                setDealForm((prev) => ({ ...prev, dealStageId: event.target.value }))
+              }
               required
               error={dealErrors.dealStageId}
               disabled={isDealSubmitting || !dealLookups}
@@ -1319,7 +1369,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <TextAreaField
               label="Комментарий"
               value={dealForm.comment}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, comment: event.target.value }))}
+              onChange={(event) =>
+                setDealForm((prev) => ({ ...prev, comment: event.target.value }))
+              }
               disabled={isDealSubmitting}
               rows={2}
             />
@@ -1337,7 +1389,11 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         <form className={styles.modalForm} onSubmit={handleTransferSubmit}>
           <InputField label="Компания" value={transferCompanyCandidate?.name ?? ""} disabled />
           <InputField label="ИНН" value={transferCompanyCandidate?.inn ?? ""} disabled />
-          <InputField label="Текущий менеджер" value={transferCompanyCandidate?.managerName ?? ""} disabled />
+          <InputField
+            label="Текущий менеджер"
+            value={transferCompanyCandidate?.managerName ?? ""}
+            disabled
+          />
 
           <SelectField
             label="Передать пользователю"

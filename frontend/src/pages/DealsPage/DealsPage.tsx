@@ -225,7 +225,10 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         if (!isCancelled) {
           setManagerFilterOptions([
             { value: "", label: "Все менеджеры" },
-            { value: String(currentUser.id), label: "\u041c\u043e\u0438 \u0441\u0434\u0435\u043b\u043a\u0438" },
+            {
+              value: String(currentUser.id),
+              label: "\u041c\u043e\u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
+            },
           ]);
         }
       }
@@ -284,12 +287,17 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const fixedCompanyTitle = useMemo(() => {
     if (!fixedCompany.companyId) return null;
     if (locationCompanyName) return locationCompanyName;
-    return deals.find((deal) => String(deal.companyId) === fixedCompany.companyId)?.companyName ?? null;
+    return (
+      deals.find((deal) => String(deal.companyId) === fixedCompany.companyId)?.companyName ?? null
+    );
   }, [deals, fixedCompany.companyId, locationCompanyName]);
 
   const selectedLifecycleStatusName = useMemo(() => {
     if (!lookups || !selectedLifecycleStatusId) return null;
-    return lookups.dealLifecycleStatuses.find((item) => item.id === selectedLifecycleStatusId)?.name ?? null;
+    return (
+      lookups.dealLifecycleStatuses.find((item) => item.id === selectedLifecycleStatusId)?.name ??
+      null
+    );
   }, [lookups, selectedLifecycleStatusId]);
 
   const activeLifecycleLabel = "Активные";
@@ -338,7 +346,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         return;
       }
 
-      const companyDeals = deals.filter((deal) => String(deal.companyId) === fixedCompany.companyId);
+      const companyDeals = deals.filter(
+        (deal) => String(deal.companyId) === fixedCompany.companyId,
+      );
       const companyStatusIds = new Set(companyDeals.map((deal) => deal.dealLifecycleStatusId));
       const activeId = active?.id ?? null;
       const desiredId =
@@ -354,7 +364,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     }
 
     if (selectedLifecycleStatusId) {
-      const exists = lookups.dealLifecycleStatuses.some((item) => item.id === selectedLifecycleStatusId);
+      const exists = lookups.dealLifecycleStatuses.some(
+        (item) => item.id === selectedLifecycleStatusId,
+      );
       if (exists) {
         return;
       }
@@ -573,9 +585,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       <DataTable>
         <thead>
           <Tr>
-	            <Th style={{ width: "16%" }}>Компания</Th>
-	            <Th style={{ width: "10%" }}>ИНН</Th>
-	            {showActiveColumns && <Th style={{ width: "10%" }}>Статус</Th>}
+            <Th style={{ width: "16%" }}>Компания</Th>
+            <Th style={{ width: "10%" }}>ИНН</Th>
+            {showActiveColumns && <Th style={{ width: "10%" }}>Статус</Th>}
             <Th style={{ width: "11%" }}>Стоимость ПЛ</Th>
             <Th style={{ width: "11%" }}>Лизинговая</Th>
             <Th style={{ width: "7%" }}>АВ, %</Th>
@@ -585,7 +597,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <Th style={{ width: "12%" }}>Создание</Th>
             <Th style={{ width: "12%" }}>Обновление</Th>
             {showCompletionColumn && <Th style={{ width: "12%" }}>Завершение</Th>}
-	            <Th style={{ width: "12%", textAlign: "left" }}>Действия</Th>
+            <Th style={{ width: "12%", textAlign: "left" }}>Действия</Th>
           </Tr>
         </thead>
         <tbody>
@@ -596,94 +608,90 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
             return (
               <Tr key={deal.id}>
-                  <Td>{deal.companyName}</Td>
-                  <Td>{deal.companyInn}</Td>
-                  {showActiveColumns && (
-                    <Td>
-                      {deal.dealStatusName}
-                    </Td>
-                  )}
+                <Td>{deal.companyName}</Td>
+                <Td>{deal.companyInn}</Td>
+                {showActiveColumns && <Td>{deal.dealStatusName}</Td>}
+                <Td>{formatNumberLike(deal.plCostRub)}</Td>
+                <Td>{deal.leasingCompanyName}</Td>
+                <Td>{formatNumberLike(deal.agentFeePercent)}</Td>
+                <Td>{formatNumberLike(deal.advanceTotalRub)}</Td>
+                {showActiveColumns && <Td>{deal.dealStageName}</Td>}
+                <Td>{deal.managerName}</Td>
+                <Td>{formatDateTime(deal.createdAt)}</Td>
+                <Td>{formatDateTime(deal.updatedAt)}</Td>
+                {showCompletionColumn && (
                   <Td>
-                    {formatNumberLike(deal.plCostRub)}
-                  </Td>
-                  <Td>
-                    {deal.leasingCompanyName}
-                  </Td>
-                  <Td>
-                    {formatNumberLike(deal.agentFeePercent)}
-                  </Td>
-                  <Td>
-                    {formatNumberLike(deal.advanceTotalRub)}
-                  </Td>
-                  {showActiveColumns && (
-                    <Td>
-                      {deal.dealStageName}
-                    </Td>
-                  )}
-	                  <Td>{deal.managerName}</Td>
-                  <Td>{formatDateTime(deal.createdAt)}</Td>
-                  <Td>{formatDateTime(deal.updatedAt)}</Td>
-                  {showCompletionColumn && (
-                    <Td>{deal.completedAt ? formatDateTime(deal.completedAt) : <span className={styles.muted}>—</span>}</Td>
-                  )}
-                  <Td style={{ textAlign: "center" }}>
-                    {canManage ? (
-                      <div className={styles.actions}>
-                        <>
-                          <div className={styles.actionButtons}>
-                            <IconButton
-                              tone="neutral"
-                              onClick={() => openDetailsModal(deal)}
-                              title="Потребность и комментарий"
-                            >
-                              <Icon name="details" size={18} />
-                            </IconButton>
-                            <IconButton
-                              tone="neutral"
-                              onClick={() => openEditModal(deal)}
-                              title="Редактировать"
-                              disabled={!lookups}
-                            >
-                              <Icon name="edit" size={18} />
-                            </IconButton>
-                            <IconButton
-                              onClick={() => void handleDelete(deal)}
-                              disabled={isDeleteSubmitting}
-                              title="Удалить"
-                              tone="danger"
-                            >
-                              {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
-                            </IconButton>
-                          </div>
-                          <select
-                            className={styles.actionSelect}
-                            value=""
-                            onChange={(event) => void handleLifecycleStatusChange(deal, event.target.value)}
-                            disabled={
-                              isStatusSubmitting ||
-                              !lookups ||
-                              lookups.dealLifecycleStatuses.length === 0
-                            }
-                            title="Результат"
-                          >
-                            <option value="" disabled>
-                              Результат
-                            </option>
-                            {(lookups?.dealLifecycleStatuses ?? [])
-                              .filter((item) => item.id !== deal.dealLifecycleStatusId)
-                              .map((item) => (
-                                <option key={item.id} value={String(item.id)}>
-                                  {item.name}
-                                </option>
-                              ))}
-                          </select>
-                        </>
-                      </div>
+                    {deal.completedAt ? (
+                      formatDateTime(deal.completedAt)
                     ) : (
                       <span className={styles.muted}>—</span>
                     )}
                   </Td>
-                </Tr>
+                )}
+                <Td style={{ textAlign: "center" }}>
+                  {canManage ? (
+                    <div className={styles.actions}>
+                      <>
+                        <div className={styles.actionButtons}>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => openDetailsModal(deal)}
+                            title="Потребность и комментарий"
+                          >
+                            <Icon name="details" size={18} />
+                          </IconButton>
+                          <IconButton
+                            tone="neutral"
+                            onClick={() => openEditModal(deal)}
+                            title="Редактировать"
+                            disabled={!lookups}
+                          >
+                            <Icon name="edit" size={18} />
+                          </IconButton>
+                          <IconButton
+                            onClick={() => void handleDelete(deal)}
+                            disabled={isDeleteSubmitting}
+                            title="Удалить"
+                            tone="danger"
+                          >
+                            {isDeleteSubmitting ? (
+                              <Spinner size={18} />
+                            ) : (
+                              <Icon name="trash" size={18} />
+                            )}
+                          </IconButton>
+                        </div>
+                        <select
+                          className={styles.actionSelect}
+                          value=""
+                          onChange={(event) =>
+                            void handleLifecycleStatusChange(deal, event.target.value)
+                          }
+                          disabled={
+                            isStatusSubmitting ||
+                            !lookups ||
+                            lookups.dealLifecycleStatuses.length === 0
+                          }
+                          title="Результат"
+                        >
+                          <option value="" disabled>
+                            Результат
+                          </option>
+                          {(lookups?.dealLifecycleStatuses ?? [])
+                            .filter((item) => item.id !== deal.dealLifecycleStatusId)
+                            .map((item) => (
+                              <option key={item.id} value={String(item.id)}>
+                                {item.name}
+                              </option>
+                            ))}
+                        </select>
+                      </>
+                    </div>
+                  ) : (
+                    <span className={styles.muted}>—</span>
+                  )}
+                </Td>
+              </Tr>
             );
           })}
 
@@ -726,20 +734,27 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <SelectField
               label="Статус"
               value={editForm.dealStatusId}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, dealStatusId: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, dealStatusId: event.target.value }))
+              }
               required
               error={editErrors.dealStatusId}
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
-                ...(lookups?.dealStatuses ?? []).map((item) => ({ value: String(item.id), label: item.name })),
+                ...(lookups?.dealStatuses ?? []).map((item) => ({
+                  value: String(item.id),
+                  label: item.name,
+                })),
               ]}
             />
 
             <InputField
               label="Стоимость ПЛ"
               value={editForm.plCostRub}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, plCostRub: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, plCostRub: event.target.value }))
+              }
               required
               error={editErrors.plCostRub}
               disabled={isEditSubmitting}
@@ -749,20 +764,27 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <SelectField
               label="Лизинговая"
               value={editForm.leasingCompanyId}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))
+              }
               required
               error={editErrors.leasingCompanyId}
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
-                ...(lookups?.leasingCompanies ?? []).map((item) => ({ value: String(item.id), label: item.name })),
+                ...(lookups?.leasingCompanies ?? []).map((item) => ({
+                  value: String(item.id),
+                  label: item.name,
+                })),
               ]}
             />
 
             <InputField
               label="АВ, %"
               value={editForm.agentFeePercent}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))
+              }
               required
               error={editErrors.agentFeePercent}
               disabled={isEditSubmitting}
@@ -773,7 +795,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
               label="АВ, руб."
               value={String(
                 Math.round(
-                  (Number(editForm.plCostRub) || 0) * ((Number(editForm.agentFeePercent) || 0) / 100),
+                  (Number(editForm.plCostRub) || 0) *
+                    ((Number(editForm.agentFeePercent) || 0) / 100),
                 ),
               )}
               disabled
@@ -783,26 +806,38 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <SelectField
               label="Этап сделки"
               value={editForm.dealStageId}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, dealStageId: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, dealStageId: event.target.value }))
+              }
               required
               error={editErrors.dealStageId}
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
-                ...(lookups?.dealStages ?? []).map((item) => ({ value: String(item.id), label: item.name })),
+                ...(lookups?.dealStages ?? []).map((item) => ({
+                  value: String(item.id),
+                  label: item.name,
+                })),
               ]}
             />
 
             <TextAreaField
               label="Комментарий"
               value={editForm.comment}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, comment: event.target.value }))
+              }
               disabled={isEditSubmitting}
               rows={3}
             />
 
             <div className={styles.modalActions}>
-              <Button type="button" onClick={closeEditModal} disabled={isEditSubmitting} variant="ghost">
+              <Button
+                type="button"
+                onClick={closeEditModal}
+                disabled={isEditSubmitting}
+                variant="ghost"
+              >
                 Отмена
               </Button>
               <Button type="submit" disabled={isEditSubmitting}>
@@ -849,7 +884,6 @@ export function DealsPage({ currentUser }: DealsPageProps) {
           </div>
         )}
       </Modal>
-
     </div>
   );
 }

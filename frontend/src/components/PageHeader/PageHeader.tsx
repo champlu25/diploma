@@ -16,4 +16,3 @@ export function PageHeader({ title, subtitle, className }: PageHeaderProps) {
     </header>
   );
 }
-

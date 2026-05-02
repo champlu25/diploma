@@ -44,4 +44,3 @@ export interface DealFormValues {
   dealStageId: string;
   comment: string;
 }
-

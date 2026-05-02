@@ -21,9 +21,7 @@ export function Field({ label, helperText, error, className, children }: FieldPr
       <span className={styles.label}>{label}</span>
       {children}
       {(error || helperText) && (
-        <span className={clsx(styles.helper, error && styles.error)}>
-          {error ?? helperText}
-        </span>
+        <span className={clsx(styles.helper, error && styles.error)}>{error ?? helperText}</span>
       )}
     </label>
   );
@@ -51,7 +49,13 @@ export type TextAreaFieldProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement
   className?: string;
 };
 
-export function TextAreaField({ label, helperText, error, className, ...rest }: TextAreaFieldProps) {
+export function TextAreaField({
+  label,
+  helperText,
+  error,
+  className,
+  ...rest
+}: TextAreaFieldProps) {
   return (
     <Field label={label} helperText={helperText} error={error} className={className}>
       <textarea className={clsx(styles.control, styles.textarea)} {...rest} />
@@ -69,7 +73,14 @@ export type SelectFieldProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, "ch
   options: SelectFieldOption[];
 };
 
-export function SelectField({ label, helperText, error, className, options, ...rest }: SelectFieldProps) {
+export function SelectField({
+  label,
+  helperText,
+  error,
+  className,
+  options,
+  ...rest
+}: SelectFieldProps) {
   return (
     <Field label={label} helperText={helperText} error={error} className={className}>
       <select className={styles.control} {...rest}>

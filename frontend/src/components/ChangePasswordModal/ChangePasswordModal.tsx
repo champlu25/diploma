@@ -81,9 +81,7 @@ export function ChangePasswordModal({
 
   return (
     <Modal open={open} title="Смена пароля" closeable={!forcedMode} onClose={onClose}>
-      <div style={{ color: "var(--color-text-secondary)", fontWeight: 500 }}>
-        {subtitle}
-      </div>
+      <div style={{ color: "var(--color-text-secondary)", fontWeight: 500 }}>{subtitle}</div>
 
       <Divider />
 

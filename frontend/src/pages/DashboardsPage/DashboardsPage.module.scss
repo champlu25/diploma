@@ -33,7 +33,9 @@
   white-space: nowrap;
 }
 
-.alert { width: 100%; }
+.alert {
+  width: 100%;
+}
 
 .metricsGrid {
   display: grid;
@@ -41,7 +43,9 @@
   gap: 14px;
 }
 
-.metricCard { width: 100%; }
+.metricCard {
+  width: 100%;
+}
 
 .metricValue,
 .metricValueHot,
@@ -53,9 +57,15 @@
   padding: 6px 2px;
 }
 
-.metricValue { color: var(--color-text-primary); }
-.metricValueHot { color: #b91c1c; }
-.metricValueCold { color: #1d4ed8; }
+.metricValue {
+  color: var(--color-text-primary);
+}
+.metricValueHot {
+  color: #b91c1c;
+}
+.metricValueCold {
+  color: #1d4ed8;
+}
 
 .chartsGrid {
   display: grid;
@@ -63,7 +73,9 @@
   gap: 16px;
 }
 
-.chartCard { width: 100%; }
+.chartCard {
+  width: 100%;
+}
 
 .loading {
   display: flex;
@@ -84,7 +96,11 @@
   width: 100%;
 }
 
-.barRow { display: flex; flex-direction: column; gap: 8px; }
+.barRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 .barMeta {
   display: flex;
@@ -136,7 +152,10 @@
   cursor: pointer;
 }
 
-.chartSelect:disabled { opacity: 0.6; cursor: not-allowed; }
+.chartSelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 @media (min-width: 920px) {
   .headerRow {
@@ -162,7 +181,9 @@
     width: auto;
   }
 
-  .metricsGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .metricsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 
   .chartsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

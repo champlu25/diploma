@@ -41,10 +41,7 @@ export function AppShell({
         <div className={styles.brand}>БЛИК CRM</div>
 
         <nav className={styles.nav} aria-label="Навигация">
-          <Link
-            to="/companies"
-            className={clsx(styles.link, isCompaniesActive && styles.active)}
-          >
+          <Link to="/companies" className={clsx(styles.link, isCompaniesActive && styles.active)}>
             <Icon name="companies" size={16} />
             Компании
           </Link>
@@ -52,10 +49,7 @@ export function AppShell({
             <Icon name="deals" size={16} />
             Сделки
           </Link>
-          <Link
-            to="/dashboards"
-            className={clsx(styles.link, isDashboardsActive && styles.active)}
-          >
+          <Link to="/dashboards" className={clsx(styles.link, isDashboardsActive && styles.active)}>
             <Icon name="dashboards" size={16} />
             Дашборды
           </Link>

@@ -7,7 +7,12 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
 import { Divider } from "../../components/ui/Divider/Divider";
-import { InputField, SelectField, TextAreaField, type SelectFieldOption } from "../../components/ui/Field/Field";
+import {
+  InputField,
+  SelectField,
+  TextAreaField,
+  type SelectFieldOption,
+} from "../../components/ui/Field/Field";
 import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import type { CompanyDetails, CompanyFormValues } from "../../types/company";
@@ -161,10 +166,12 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
   const [editErrors, setEditErrors] = useState<CompanyValidationErrors>({});
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [taxSystemOptions, setTaxSystemOptions] = useState<SelectFieldOption[]>([{ value: "", label: "—" }]);
-  const [communicationChannelOptions, setCommunicationChannelOptions] = useState<SelectFieldOption[]>([
+  const [taxSystemOptions, setTaxSystemOptions] = useState<SelectFieldOption[]>([
     { value: "", label: "—" },
   ]);
+  const [communicationChannelOptions, setCommunicationChannelOptions] = useState<
+    SelectFieldOption[]
+  >([{ value: "", label: "—" }]);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(companyId) || companyId <= 0) {
@@ -214,7 +221,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
       ks: company.ks ?? "",
       taxSystemId: company.taxSystemId === null ? "" : String(company.taxSystemId),
       preferredCommunicationChannelId:
-        company.preferredCommunicationChannelId === null ? "" : String(company.preferredCommunicationChannelId),
+        company.preferredCommunicationChannelId === null
+          ? ""
+          : String(company.preferredCommunicationChannelId),
     });
 
     try {
@@ -225,7 +234,10 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
       ]);
       setCommunicationChannelOptions([
         { value: "", label: "—" },
-        ...lookups.communicationChannels.map((item) => ({ value: String(item.id), label: item.name })),
+        ...lookups.communicationChannels.map((item) => ({
+          value: String(item.id),
+          label: item.name,
+        })),
       ]);
     } catch {
       setTaxSystemOptions([{ value: "", label: "—" }]);
@@ -374,7 +386,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <div className={styles.kvRow}>
               <span className={styles.kvKey}>Выручка</span>
               <span className={styles.kvValue}>
-                {company.revenueRub === null ? "—" : `${company.revenueRub.toLocaleString("ru-RU")} ₽`}
+                {company.revenueRub === null
+                  ? "—"
+                  : `${company.revenueRub.toLocaleString("ru-RU")} ₽`}
               </span>
             </div>
             <div className={styles.kvRow}>
@@ -383,7 +397,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             </div>
             <div className={styles.kvRow}>
               <span className={styles.kvKey}>Предпочитает общение через</span>
-              <span className={styles.kvValue}>{company.preferredCommunicationChannelName || "—"}</span>
+              <span className={styles.kvValue}>
+                {company.preferredCommunicationChannelName || "—"}
+              </span>
             </div>
           </div>
         </section>
@@ -443,7 +459,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             )}
           </tbody>
         </DataTable>
-        {!canManage && <div className={styles.muted}>У вас нет прав на редактирование этой компании.</div>}
+        {!canManage && (
+          <div className={styles.muted}>У вас нет прав на редактирование этой компании.</div>
+        )}
       </section>
 
       <Modal
@@ -481,7 +499,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <InputField
               label="Контактное лицо"
               value={editForm.contactName}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, contactName: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, contactName: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
@@ -504,7 +524,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
               label="Связаться"
               type="datetime-local"
               value={editForm.nextContactAt}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
@@ -535,7 +557,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <SelectField
               label="Система налогообложения"
               value={editForm.taxSystemId}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, taxSystemId: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, taxSystemId: event.target.value }))
+              }
               options={taxSystemOptions}
               disabled={isEditSubmitting}
             />
@@ -543,14 +567,18 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <InputField
               label="Юридический адрес"
               value={editForm.legalAddress}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, legalAddress: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, legalAddress: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
             <InputField
               label="Фактический адрес"
               value={editForm.actualAddress}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, actualAddress: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, actualAddress: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
@@ -558,14 +586,18 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
               label="День рождения директора"
               type="date"
               value={editForm.directorBirthDate}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))
+              }
               disabled={isEditSubmitting}
             />
 
             <InputField
               label="Выручка, ₽"
               value={editForm.revenueRub}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, revenueRub: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, revenueRub: event.target.value }))
+              }
               disabled={isEditSubmitting}
               error={editErrors.revenueRub}
               inputMode="numeric"
@@ -575,7 +607,10 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
               label="Предпочитает общение через"
               value={editForm.preferredCommunicationChannelId}
               onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, preferredCommunicationChannelId: event.target.value }))
+                setEditForm((prev) => ({
+                  ...prev,
+                  preferredCommunicationChannelId: event.target.value,
+                }))
               }
               options={communicationChannelOptions}
               disabled={isEditSubmitting}
@@ -584,7 +619,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <TextAreaField
               label="Вид деятельности"
               value={editForm.activity}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, activity: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, activity: event.target.value }))
+              }
               disabled={isEditSubmitting}
               rows={3}
             />
@@ -592,7 +629,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <TextAreaField
               label="Выявленный негатив"
               value={editForm.negativeInfo}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, negativeInfo: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, negativeInfo: event.target.value }))
+              }
               disabled={isEditSubmitting}
               rows={3}
             />
@@ -600,7 +639,9 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <TextAreaField
               label="Комментарий"
               value={editForm.comment}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, comment: event.target.value }))}
+              onChange={(event) =>
+                setEditForm((prev) => ({ ...prev, comment: event.target.value }))
+              }
               disabled={isEditSubmitting}
               rows={4}
             />

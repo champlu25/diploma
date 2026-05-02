@@ -17,7 +17,12 @@ export interface PieChartProps {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+const polarToCartesian = (
+  centerX: number,
+  centerY: number,
+  radius: number,
+  angleInDegrees: number,
+) => {
   const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
   return {
     x: centerX + radius * Math.cos(angleInRadians),

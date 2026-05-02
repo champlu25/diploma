@@ -45,9 +45,15 @@ export function VerticalBarChart({
 
   return (
     <div className={styles.root} aria-label={ariaLabel}>
-      <div className={styles.chart} role="img" aria-label={ariaLabel} style={{ ["--h" as never]: `${height}px` }}>
+      <div
+        className={styles.chart}
+        role="img"
+        aria-label={ariaLabel}
+        style={{ ["--h" as never]: `${height}px` }}
+      >
         {normalized.cleaned.map((bar) => {
-          const percent = normalized.maxValue > 0 ? Math.round((bar.value / normalized.maxValue) * 100) : 0;
+          const percent =
+            normalized.maxValue > 0 ? Math.round((bar.value / normalized.maxValue) * 100) : 0;
           const title = bar.title ?? `${bar.label}: ${bar.value}`;
 
           return (

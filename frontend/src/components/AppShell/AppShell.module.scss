@@ -43,7 +43,9 @@
   border-radius: 12px;
   color: rgba(28, 37, 38, 0.85);
   font-weight: 600;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
 }
 
 .link::after {
@@ -92,7 +94,9 @@
   align-items: center;
   justify-content: center;
   color: var(--color-accent);
-  transition: background-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
 .iconLink:hover,

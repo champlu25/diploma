@@ -55,9 +55,7 @@ const getFullName = (person: {
   firstName: string | null;
   middleName?: string | null;
 }): string => {
-  const fullName = [person.lastName, person.firstName, person.middleName]
-    .filter(Boolean)
-    .join(" ");
+  const fullName = [person.lastName, person.firstName, person.middleName].filter(Boolean).join(" ");
   return fullName || "—";
 };
 
@@ -163,13 +161,20 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [communicationChannelsError, setCommunicationChannelsError] = useState<string | null>(null);
   const [communicationChannelName, setCommunicationChannelName] = useState("");
   const [isCommunicationChannelCreating, setIsCommunicationChannelCreating] = useState(false);
-  const [communicationChannelCreateError, setCommunicationChannelCreateError] = useState<string | null>(null);
+  const [communicationChannelCreateError, setCommunicationChannelCreateError] = useState<
+    string | null
+  >(null);
   const [communicationEditModalOpen, setCommunicationEditModalOpen] = useState(false);
-  const [communicationEditCandidate, setCommunicationEditCandidate] = useState<CommunicationChannel | null>(null);
+  const [communicationEditCandidate, setCommunicationEditCandidate] =
+    useState<CommunicationChannel | null>(null);
   const [communicationEditName, setCommunicationEditName] = useState("");
   const [isCommunicationChannelUpdating, setIsCommunicationChannelUpdating] = useState(false);
-  const [communicationChannelUpdateError, setCommunicationChannelUpdateError] = useState<string | null>(null);
-  const [deletingCommunicationChannelId, setDeletingCommunicationChannelId] = useState<number | null>(null);
+  const [communicationChannelUpdateError, setCommunicationChannelUpdateError] = useState<
+    string | null
+  >(null);
+  const [deletingCommunicationChannelId, setDeletingCommunicationChannelId] = useState<
+    number | null
+  >(null);
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -204,10 +209,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [passwordModalUsername, setPasswordModalUsername] = useState<string | null>(null);
   const [passwordModalValue, setPasswordModalValue] = useState<string | null>(null);
 
-  const groupLeads = useMemo(
-    () => users.filter((user) => user.role === "group_lead"),
-    [users],
-  );
+  const groupLeads = useMemo(() => users.filter((user) => user.role === "group_lead"), [users]);
 
   const loadUsers = useCallback(async () => {
     if (!isOwner) {
@@ -357,7 +359,9 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
       await setOwnerLeasingCompanyActive(company.id, !company.isActive);
       await loadLeasingCompanies();
     } catch (requestError) {
-      setLeasingCompaniesError(getApiErrorMessage(requestError, "Не удалось обновить лизинговую компанию."));
+      setLeasingCompaniesError(
+        getApiErrorMessage(requestError, "Не удалось обновить лизинговую компанию."),
+      );
     } finally {
       setDeletingLeasingCompanyId(null);
     }
@@ -427,7 +431,10 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
     try {
       setIsCommunicationChannelUpdating(true);
       setCommunicationChannelUpdateError(null);
-      await updateOwnerCommunicationChannel(communicationEditCandidate.id, communicationEditName.trim());
+      await updateOwnerCommunicationChannel(
+        communicationEditCandidate.id,
+        communicationEditName.trim(),
+      );
       setCommunicationEditModalOpen(false);
       setCommunicationEditCandidate(null);
       setCommunicationEditName("");
@@ -452,7 +459,9 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
       await setOwnerCommunicationChannelActive(channel.id, !channel.isActive);
       await loadCommunicationChannels();
     } catch (requestError) {
-      setCommunicationChannelsError(getApiErrorMessage(requestError, "Не удалось обновить канал связи."));
+      setCommunicationChannelsError(
+        getApiErrorMessage(requestError, "Не удалось обновить канал связи."),
+      );
     } finally {
       setDeletingCommunicationChannelId(null);
     }
@@ -550,13 +559,14 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
     }
   };
 
-  const usersMessages = useMemo(() => Boolean(usersError || rowActionError), [rowActionError, usersError]);
+  const usersMessages = useMemo(
+    () => Boolean(usersError || rowActionError),
+    [rowActionError, usersError],
+  );
 
   return (
     <div className={styles.page}>
-      <PageHeader
-        title="Настройки"
-      />
+      <PageHeader title="Настройки" />
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Профиль</h2>
@@ -604,7 +614,9 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
           {currentUser.role === "manager" && (
             <div className={styles.userCardMeta}>
               Руководитель:{" "}
-              <strong>{currentUser.groupLeadUsername ? currentUser.groupLeadUsername : "не назначен"}</strong>
+              <strong>
+                {currentUser.groupLeadUsername ? currentUser.groupLeadUsername : "не назначен"}
+              </strong>
             </div>
           )}
         </form>
@@ -684,7 +696,9 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
 
           {!isUsersLoading && !usersError && (
             <div className={styles.usersGrid}>
-              {users.length === 0 && <div className={styles.emptyText}>Пользователей пока нет.</div>}
+              {users.length === 0 && (
+                <div className={styles.emptyText}>Пользователей пока нет.</div>
+              )}
 
               {users.map((user) => {
                 const isBusyPassword = isRowActionLoading === user.id;
@@ -922,7 +936,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                     <Tr key={company.id}>
                       <Td>{company.name}</Td>
                       <Td>
-                        {company.isActive ? <Badge>Активна</Badge> : <span className={styles.muted}>Архив</span>}
+                        {company.isActive ? (
+                          <Badge>Активна</Badge>
+                        ) : (
+                          <span className={styles.muted}>Архив</span>
+                        )}
                       </Td>
                       <Td>{formatDateTime(company.createdAt)}</Td>
                       <Td>{formatDateTime(company.updatedAt)}</Td>
@@ -975,7 +993,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
 
           <Divider />
 
-          <form className={styles.leasingCreateForm} onSubmit={handleCreateLeasingCompany} noValidate>
+          <form
+            className={styles.leasingCreateForm}
+            onSubmit={handleCreateLeasingCompany}
+            noValidate
+          >
             <div className={styles.leasingCreateRow}>
               <InputField
                 label="Новая лизинговая"
@@ -1008,7 +1030,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               setLeasingCompanyUpdateError(null);
             }}
           >
-            <form className={styles.leasingEditForm} onSubmit={handleUpdateLeasingCompany} noValidate>
+            <form
+              className={styles.leasingEditForm}
+              onSubmit={handleUpdateLeasingCompany}
+              noValidate
+            >
               <InputField
                 label="Название"
                 value={leasingEditName}
@@ -1083,7 +1109,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                     <Tr key={channel.id}>
                       <Td>{channel.name}</Td>
                       <Td>
-                        {channel.isActive ? <Badge>Активен</Badge> : <span className={styles.muted}>Архив</span>}
+                        {channel.isActive ? (
+                          <Badge>Активен</Badge>
+                        ) : (
+                          <span className={styles.muted}>Архив</span>
+                        )}
                       </Td>
                       <Td>{formatDateTime(channel.createdAt)}</Td>
                       <Td>{formatDateTime(channel.updatedAt)}</Td>
@@ -1136,7 +1166,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
 
           <Divider />
 
-          <form className={styles.leasingCreateForm} onSubmit={handleCreateCommunicationChannel} noValidate>
+          <form
+            className={styles.leasingCreateForm}
+            onSubmit={handleCreateCommunicationChannel}
+            noValidate
+          >
             <div className={styles.leasingCreateRow}>
               <InputField
                 label="Новый канал"
@@ -1169,7 +1203,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               setCommunicationChannelUpdateError(null);
             }}
           >
-            <form className={styles.leasingEditForm} onSubmit={handleUpdateCommunicationChannel} noValidate>
+            <form
+              className={styles.leasingEditForm}
+              onSubmit={handleUpdateCommunicationChannel}
+              noValidate
+            >
               <InputField
                 label="Название"
                 value={communicationEditName}

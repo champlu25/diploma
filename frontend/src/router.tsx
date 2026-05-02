@@ -60,11 +60,7 @@ export const createAppRouter = ({
       children: [
         {
           index: true,
-          element: currentUser?.mustChangePassword ? (
-            redirect("settings")
-          ) : (
-            redirect("deals")
-          ),
+          element: currentUser?.mustChangePassword ? redirect("settings") : redirect("deals"),
         },
         {
           path: "companies",
@@ -97,10 +93,7 @@ export const createAppRouter = ({
         {
           path: "settings",
           element: currentUser ? (
-            <SettingsPage
-              currentUser={currentUser}
-              onCurrentUserUpdated={onCurrentUserUpdated}
-            />
+            <SettingsPage currentUser={currentUser} onCurrentUserUpdated={onCurrentUserUpdated} />
           ) : (
             redirect("/login")
           ),
