@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppShell } from "./components/AppShell/AppShell";
 import { CompanyDetailsPage } from "./pages/CompanyDetailsPage/CompanyDetailsPage";
@@ -18,7 +18,7 @@ interface CreateAppRouterOptions {
   onCurrentUserUpdated: (user: CurrentUser) => void;
 }
 
-const redirect = (to: string) => createElement(Navigate, { to, replace: true });
+const redirect = (to: string) => <Navigate to={to} replace />;
 
 const protectedPage = (currentUser: CurrentUser | null, page: ReactNode) => {
   if (!currentUser) {
@@ -43,17 +43,17 @@ export const createAppRouter = ({
   createBrowserRouter([
     {
       path: "/login",
-      element: currentUser ? redirect("/") : createElement(LoginPage, { onLogin }),
+      element: currentUser ? redirect("/") : <LoginPage onLogin={onLogin} />,
     },
     {
       path: "/",
       element: currentUser ? (
-        createElement(AppShell, {
-          currentUser,
-          onLogout,
-          sessionError,
-          onPasswordChanged,
-        })
+        <AppShell
+          currentUser={currentUser}
+          onLogout={onLogout}
+          sessionError={sessionError}
+          onPasswordChanged={onPasswordChanged}
+        />
       ) : (
         redirect("/login")
       ),
@@ -70,34 +70,37 @@ export const createAppRouter = ({
           path: "companies",
           element: protectedPage(
             currentUser,
-            currentUser && createElement(CompaniesPage, { currentUser }),
+            currentUser && <CompaniesPage currentUser={currentUser} />,
           ),
         },
         {
           path: "companies/:companyId",
           element: protectedPage(
             currentUser,
-            currentUser && createElement(CompanyDetailsPage, { currentUser }),
+            currentUser && <CompanyDetailsPage currentUser={currentUser} />,
           ),
         },
         {
           path: "deals",
           element: protectedPage(
             currentUser,
-            currentUser && createElement(DealsPage, { currentUser }),
+            currentUser && <DealsPage currentUser={currentUser} />,
           ),
         },
         {
           path: "dashboards",
           element: protectedPage(
             currentUser,
-            currentUser && createElement(DashboardsPage, { currentUser }),
+            currentUser && <DashboardsPage currentUser={currentUser} />,
           ),
         },
         {
           path: "settings",
           element: currentUser ? (
-            createElement(SettingsPage, { currentUser, onCurrentUserUpdated })
+            <SettingsPage
+              currentUser={currentUser}
+              onCurrentUserUpdated={onCurrentUserUpdated}
+            />
           ) : (
             redirect("/login")
           ),
