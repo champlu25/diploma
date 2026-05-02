@@ -1,4 +1,5 @@
 import { httpClient } from "./httpClient";
+import { API_ROUTES } from "../constants/api";
 
 export interface ChartTypeDto {
   id: number;
@@ -22,7 +23,7 @@ interface SaveChartViewSettingResponse {
 
 export const getChartViewSettings = async (): Promise<GetChartViewSettingsResponse> => {
   const { data } = await httpClient.get<GetChartViewSettingsResponse>(
-    "/api/dashboards/chart-view-settings",
+    API_ROUTES.dashboardsChartViewSettings,
   );
   return data;
 };
@@ -32,7 +33,7 @@ export const saveChartViewSetting = async (
   chartTypeId: number,
 ): Promise<SaveChartViewSettingResponse> => {
   const { data } = await httpClient.put<SaveChartViewSettingResponse>(
-    `/api/dashboards/chart-view-settings/${encodeURIComponent(chartKey)}`,
+    API_ROUTES.dashboardsChartViewSettingByKey(chartKey),
     { chartTypeId },
   );
   return data;

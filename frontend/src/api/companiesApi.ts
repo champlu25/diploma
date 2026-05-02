@@ -1,4 +1,5 @@
 import { httpClient } from "./httpClient";
+import { API_ROUTES } from "../constants/api";
 import type { Company, CompanyDetails, CompanyFormValues } from "../types/company";
 
 interface CompanyDto {
@@ -119,22 +120,25 @@ const toCompanyDetails = (dto: CompanyDto): CompanyDetails => ({
 });
 
 export const getCompanies = async (): Promise<Company[]> => {
-  const { data } = await httpClient.get<ListCompaniesResponse>("/api/companies");
+  const { data } = await httpClient.get<ListCompaniesResponse>(API_ROUTES.companies);
   return data.companies.map(toCompany);
 };
 
 export const getCompanyById = async (companyId: number): Promise<CompanyDetails> => {
-  const { data } = await httpClient.get<CompanyDetailsResponse>(`/api/companies/${companyId}`);
+  const { data } = await httpClient.get<CompanyDetailsResponse>(API_ROUTES.companyById(companyId));
   return toCompanyDetails(data.company);
 };
 
 export const getCompanyLookups = async (): Promise<CompanyLookupsResponse> => {
-  const { data } = await httpClient.get<CompanyLookupsResponse>("/api/companies/lookups");
+  const { data } = await httpClient.get<CompanyLookupsResponse>(API_ROUTES.companyLookups);
   return data;
 };
 
 export const createCompany = async (values: CompanyFormValues): Promise<CompanyResponse> => {
-  const { data } = await httpClient.post<CompanyDtoResponse>("/api/companies", toPayload(values));
+  const { data } = await httpClient.post<CompanyDtoResponse>(
+    API_ROUTES.companies,
+    toPayload(values),
+  );
   return {
     ...data,
     company: toCompany(data.company),
@@ -146,7 +150,7 @@ export const updateCompany = async (
   values: CompanyFormValues,
 ): Promise<CompanyResponse> => {
   const { data } = await httpClient.patch<CompanyDtoResponse>(
-    `/api/companies/${companyId}`,
+    API_ROUTES.companyById(companyId),
     toPayload(values),
   );
   return {
@@ -156,7 +160,9 @@ export const updateCompany = async (
 };
 
 export const deleteCompany = async (companyId: number): Promise<DeleteCompanyResponse> => {
-  const { data } = await httpClient.delete<DeleteCompanyResponse>(`/api/companies/${companyId}`);
+  const { data } = await httpClient.delete<DeleteCompanyResponse>(
+    API_ROUTES.companyById(companyId),
+  );
   return data;
 };
 
@@ -165,7 +171,7 @@ export const transferCompany = async (
   targetUserId: number,
 ): Promise<CompanyResponse> => {
   const { data } = await httpClient.post<CompanyDtoResponse>(
-    `/api/companies/${companyId}/transfer`,
+    API_ROUTES.companyTransfer(companyId),
     { targetUserId },
   );
 

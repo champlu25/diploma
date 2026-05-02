@@ -1,4 +1,5 @@
 import { httpClient } from "./httpClient";
+import { API_ROUTES } from "../constants/api";
 
 export interface LeasingCompany {
   id: number;
@@ -22,14 +23,14 @@ interface UpdateLeasingCompanyResponse {
 
 export const getOwnerLeasingCompanies = async (): Promise<LeasingCompany[]> => {
   const { data } = await httpClient.get<GetLeasingCompaniesResponse>(
-    "/api/owner/leasing-companies",
+    API_ROUTES.ownerLeasingCompanies,
   );
   return data.leasingCompanies;
 };
 
 export const createOwnerLeasingCompany = async (name: string): Promise<LeasingCompany> => {
   const { data } = await httpClient.post<CreateLeasingCompanyResponse>(
-    "/api/owner/leasing-companies",
+    API_ROUTES.ownerLeasingCompanies,
     { name },
   );
   return data.leasingCompany;
@@ -40,7 +41,7 @@ export const updateOwnerLeasingCompany = async (
   name: string,
 ): Promise<LeasingCompany> => {
   const { data } = await httpClient.patch<UpdateLeasingCompanyResponse>(
-    `/api/owner/leasing-companies/${id}`,
+    API_ROUTES.ownerLeasingCompanyById(id),
     {
       name,
     },
@@ -53,7 +54,7 @@ export const setOwnerLeasingCompanyActive = async (
   isActive: boolean,
 ): Promise<LeasingCompany> => {
   const { data } = await httpClient.patch<UpdateLeasingCompanyResponse>(
-    `/api/owner/leasing-companies/${id}`,
+    API_ROUTES.ownerLeasingCompanyById(id),
     {
       isActive,
     },
@@ -62,5 +63,5 @@ export const setOwnerLeasingCompanyActive = async (
 };
 
 export const deleteOwnerLeasingCompany = async (id: number): Promise<void> => {
-  await httpClient.delete(`/api/owner/leasing-companies/${id}`);
+  await httpClient.delete(API_ROUTES.ownerLeasingCompanyById(id));
 };

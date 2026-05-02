@@ -14,6 +14,7 @@ import { getGroupLeadManagers, getTransferTargets, getUsers } from "../../api/us
 import type { Company, CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { DealFormValues, DealLookups } from "../../types/deal";
 import type { CurrentUser, User } from "../../types/user";
+import { APP_ROUTES } from "../../constants/routes";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
@@ -667,7 +668,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setError(null);
       await createDeal(creatingDealCompany.id, dealForm);
       closeCreateDealModal();
-      navigate("/deals");
+      navigate(APP_ROUTES.deals);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось создать сделку."));
     } finally {
@@ -872,7 +873,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                   <button
                     type="button"
                     className={styles.companyLink}
-                    onClick={() => navigate(`/companies/${company.id}`)}
+                    onClick={() => navigate(APP_ROUTES.companyDetails(company.id))}
                     title="Открыть карточку компании"
                   >
                     {company.name}
@@ -928,7 +929,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
                               const params = new URLSearchParams({
                                 companyId: String(company.id),
                               });
-                              navigate(`/deals?${params.toString()}`, {
+                              navigate(`${APP_ROUTES.deals}?${params.toString()}`, {
                                 state: { companyName: company.name },
                               });
                             }}

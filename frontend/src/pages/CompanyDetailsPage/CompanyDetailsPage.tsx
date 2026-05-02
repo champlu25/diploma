@@ -18,6 +18,7 @@ import { Spinner } from "../../components/ui/Spinner/Spinner";
 import type { CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { Deal } from "../../types/deal";
 import type { CurrentUser } from "../../types/user";
+import { APP_ROUTES } from "../../constants/routes";
 import { getApiErrorMessage } from "../../utils/httpError";
 import styles from "./CompanyDetailsPage.module.scss";
 
@@ -289,7 +290,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
         <div className={styles.messages}>
           <Alert tone="error">{error ?? "Компания не найдена."}</Alert>
         </div>
-        <Button type="button" variant="ghost" onClick={() => navigate("/companies")}>
+        <Button type="button" variant="ghost" onClick={() => navigate(APP_ROUTES.companies)}>
           Назад к компаниям
         </Button>
       </div>
@@ -306,7 +307,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
       <PageHeader title={company.name} />
 
       <div className={styles.topActions}>
-        <Button type="button" variant="ghost" onClick={() => navigate("/companies")}>
+        <Button type="button" variant="ghost" onClick={() => navigate(APP_ROUTES.companies)}>
           Назад
         </Button>
         <div className={styles.topRight}>

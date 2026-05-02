@@ -1,13 +1,14 @@
 import axios from "axios";
-import { httpClient } from "./httpClient";
+import { API_ROUTES } from "../constants/api";
 import type { CurrentUser } from "../types/user";
+import { httpClient } from "./httpClient";
 
 interface AuthResponse {
   user: CurrentUser;
 }
 
 export const login = async (username: string, password: string): Promise<CurrentUser> => {
-  const { data } = await httpClient.post<AuthResponse>("/api/auth/login", {
+  const { data } = await httpClient.post<AuthResponse>(API_ROUTES.authLogin, {
     username,
     password,
   });
@@ -16,12 +17,12 @@ export const login = async (username: string, password: string): Promise<Current
 };
 
 export const logout = async (): Promise<void> => {
-  await httpClient.post("/api/auth/logout");
+  await httpClient.post(API_ROUTES.authLogout);
 };
 
 export const getCurrentUser = async (): Promise<CurrentUser | null> => {
   try {
-    const { data } = await httpClient.get<AuthResponse>("/api/auth/me");
+    const { data } = await httpClient.get<AuthResponse>(API_ROUTES.authMe);
     return data.user;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -33,7 +34,7 @@ export const getCurrentUser = async (): Promise<CurrentUser | null> => {
 };
 
 export const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
-  await httpClient.post("/api/auth/change-password", { oldPassword, newPassword });
+  await httpClient.post(API_ROUTES.authChangePassword, { oldPassword, newPassword });
 };
 
 export const updateCurrentUserProfile = async (params: {
@@ -41,6 +42,6 @@ export const updateCurrentUserProfile = async (params: {
   firstName: string | null;
   middleName: string | null;
 }): Promise<CurrentUser> => {
-  const { data } = await httpClient.patch<AuthResponse>("/api/auth/me", params);
+  const { data } = await httpClient.patch<AuthResponse>(API_ROUTES.authMe, params);
   return data.user;
 };

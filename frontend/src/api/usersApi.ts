@@ -1,4 +1,5 @@
 import { httpClient } from "./httpClient";
+import { API_ROUTES } from "../constants/api";
 import type { User, UserRole } from "../types/user";
 
 interface UserDto {
@@ -34,7 +35,7 @@ const toUser = (dto: UserDto): User => ({
 });
 
 export const getUsers = async (): Promise<User[]> => {
-  const { data } = await httpClient.get<UsersResponse>("/api/users");
+  const { data } = await httpClient.get<UsersResponse>(API_ROUTES.users);
   return data.users.map(toUser);
 };
 
@@ -54,7 +55,7 @@ export const createUser = async (params: {
   firstName?: string;
   middleName?: string;
 }): Promise<{ message: string; user: User; tempPassword: string }> => {
-  const { data } = await httpClient.post<CreateUserResponse>("/api/owner/users", params);
+  const { data } = await httpClient.post<CreateUserResponse>(API_ROUTES.ownerUsers, params);
 
   return {
     message: data.message,
@@ -70,7 +71,7 @@ export const resetUserPassword = async (
     message: string;
     user: { id: number; username: string };
     tempPassword: string;
-  }>(`/api/owner/users/${userId}/reset-password`);
+  }>(API_ROUTES.ownerUserResetPassword(userId));
 
   return data;
 };
@@ -98,7 +99,7 @@ interface GroupManagersResponse {
 }
 
 export const getGroupLeadManagers = async (): Promise<GroupManager[]> => {
-  const { data } = await httpClient.get<GroupManagersResponse>("/api/group-lead/managers");
+  const { data } = await httpClient.get<GroupManagersResponse>(API_ROUTES.groupLeadManagers);
   return data.managers.map((manager) => ({
     id: manager.id,
     username: manager.username,
@@ -114,6 +115,6 @@ interface TransferTargetsResponse {
 }
 
 export const getTransferTargets = async (): Promise<User[]> => {
-  const { data } = await httpClient.get<TransferTargetsResponse>("/api/users/transfer-targets");
+  const { data } = await httpClient.get<TransferTargetsResponse>(API_ROUTES.usersTransferTargets);
   return data.users.map(toUser);
 };

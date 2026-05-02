@@ -22,6 +22,7 @@ import { InputField, SelectField, TextAreaField } from "../../components/ui/Fiel
 import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { APP_ROUTES } from "../../constants/routes";
 import styles from "./DealsPage.module.scss";
 
 interface DealsPageProps {
@@ -575,7 +576,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
           </nav>
 
           {fixedCompany.companyId && (
-            <Button type="button" variant="primary" onClick={() => navigate("/deals")}>
+            <Button type="button" variant="primary" onClick={() => navigate(APP_ROUTES.deals)}>
               Все сделки
             </Button>
           )}

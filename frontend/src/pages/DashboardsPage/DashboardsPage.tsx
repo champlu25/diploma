@@ -12,19 +12,16 @@ import { InputField } from "../../components/ui/Field/Field";
 import { Button } from "../../components/ui/Button/Button";
 import { PieChart } from "../../components/charts/PieChart/PieChart";
 import { VerticalBarChart } from "../../components/charts/VerticalBarChart/VerticalBarChart";
+import {
+  ACTIVE_LIFECYCLE_LABEL,
+  DASHBOARD_CHART_KEYS,
+  DASHBOARD_COLORS,
+} from "../../constants/dashboard";
 import styles from "./DashboardsPage.module.scss";
 
 interface DashboardsPageProps {
   currentUser: CurrentUser;
 }
-
-const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
-const chartKeys = {
-  managerCount: "manager_deals_count",
-  managerIncome: "manager_income_rub",
-  stageAv: "stage_av_rub",
-  leasingAv: "leasing_av_rub",
-} as const;
 
 const includesAny = (value: string, needles: string[]): boolean => {
   const normalized = value.toLocaleLowerCase("ru-RU");
@@ -149,7 +146,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   );
   const activeLifecycleOption = useMemo(
     () =>
-      lifecycleOptions.find((status) => status === "Активные") ??
+      lifecycleOptions.find((status) => status === ACTIVE_LIFECYCLE_LABEL) ??
       lifecycleOptions.find((status) => includesAny(status, ["актив"])) ??
       lifecycleOptions[0] ??
       "",
@@ -175,13 +172,13 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
     });
   }, [deals, fromMs, toMs]);
   const managerCountLifecycleFilter =
-    lifecycleFilters[chartKeys.managerCount] ?? activeLifecycleOption;
+    lifecycleFilters[DASHBOARD_CHART_KEYS.managerCount] ?? activeLifecycleOption;
   const managerIncomeLifecycleFilter =
-    lifecycleFilters[chartKeys.managerIncome] ?? activeLifecycleOption;
-  const stageAvLifecycleFilter = lifecycleFilters[chartKeys.stageAv] ?? "";
-  const leasingAvLifecycleFilter = lifecycleFilters[chartKeys.leasingAv] ?? "";
-  const stageAvFilter = managerFilters[chartKeys.stageAv] ?? "";
-  const leasingAvFilter = managerFilters[chartKeys.leasingAv] ?? "";
+    lifecycleFilters[DASHBOARD_CHART_KEYS.managerIncome] ?? activeLifecycleOption;
+  const stageAvLifecycleFilter = lifecycleFilters[DASHBOARD_CHART_KEYS.stageAv] ?? "";
+  const leasingAvLifecycleFilter = lifecycleFilters[DASHBOARD_CHART_KEYS.leasingAv] ?? "";
+  const stageAvFilter = managerFilters[DASHBOARD_CHART_KEYS.stageAv] ?? "";
+  const leasingAvFilter = managerFilters[DASHBOARD_CHART_KEYS.leasingAv] ?? "";
 
   const getChartView = (chartKey: string): number | null => {
     const stored = chartViews[chartKey];
@@ -366,7 +363,11 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       counts.set(deal.managerName, (counts.get(deal.managerName) ?? 0) + 1);
     }
     return Array.from(counts.entries())
-      .map(([label, value], index) => ({ label, value, color: COLORS[index % COLORS.length]! }))
+      .map(([label, value], index) => ({
+        label,
+        value,
+        color: DASHBOARD_COLORS[index % DASHBOARD_COLORS.length]!,
+      }))
       .sort((a, b) => b.value - a.value);
   }, [periodFilteredDeals, managerCountLifecycleFilter]);
 
@@ -384,7 +385,11 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       );
     }
     return Array.from(sums.entries())
-      .map(([label, value], index) => ({ label, value, color: COLORS[index % COLORS.length]! }))
+      .map(([label, value], index) => ({
+        label,
+        value,
+        color: DASHBOARD_COLORS[index % DASHBOARD_COLORS.length]!,
+      }))
       .sort((a, b) => b.value - a.value);
   }, [periodFilteredDeals, managerIncomeLifecycleFilter]);
 
@@ -406,7 +411,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
         label,
         count,
         value: sum,
-        color: COLORS[index % COLORS.length]!,
+        color: DASHBOARD_COLORS[index % DASHBOARD_COLORS.length]!,
       }))
       .sort(
         (a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"),
@@ -431,7 +436,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
         label,
         count,
         value: sum,
-        color: COLORS[index % COLORS.length]!,
+        color: DASHBOARD_COLORS[index % DASHBOARD_COLORS.length]!,
       }))
       .sort(
         (a, b) => b.value - a.value || b.count - a.count || a.label.localeCompare(b.label, "ru-RU"),
@@ -560,7 +565,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
               title="Распределение сделок по менеджерам"
               subtitle="По выбранному типу сделки"
               className={styles.chartCard}
-              actions={renderChartActions(chartKeys.managerCount, false, true, false)}
+              actions={renderChartActions(DASHBOARD_CHART_KEYS.managerCount, false, true, false)}
             >
               {isLoading ? (
                 <div className={styles.loading}>
@@ -569,8 +574,8 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                 </div>
               ) : (
                 <>
-                  {getChartView(chartKeys.managerCount) !== chartTypeIds.verticalId &&
-                    getChartView(chartKeys.managerCount) !== chartTypeIds.pieId && (
+                  {getChartView(DASHBOARD_CHART_KEYS.managerCount) !== chartTypeIds.verticalId &&
+                    getChartView(DASHBOARD_CHART_KEYS.managerCount) !== chartTypeIds.pieId && (
                       <div className={styles.barList}>
                         {managerCountSegments.map((item) => (
                           <div key={item.label} className={styles.barRow}>
@@ -593,7 +598,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                         ))}
                       </div>
                     )}
-                  {getChartView(chartKeys.managerCount) === chartTypeIds.verticalId && (
+                  {getChartView(DASHBOARD_CHART_KEYS.managerCount) === chartTypeIds.verticalId && (
                     <VerticalBarChart
                       ariaLabel="Сделки по менеджерам"
                       emptyText="Сделок пока нет"
@@ -605,7 +610,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                       }))}
                     />
                   )}
-                  {getChartView(chartKeys.managerCount) === chartTypeIds.pieId && (
+                  {getChartView(DASHBOARD_CHART_KEYS.managerCount) === chartTypeIds.pieId && (
                     <PieChart
                       ariaLabel="Сделки по менеджерам"
                       emptyText="Сделок пока нет"
@@ -620,7 +625,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
               title="Сумма общего дохода АВ по менеджерам"
               subtitle="По выбранному типу сделки"
               className={styles.chartCard}
-              actions={renderChartActions(chartKeys.managerIncome, false, true, false)}
+              actions={renderChartActions(DASHBOARD_CHART_KEYS.managerIncome, false, true, false)}
             >
               {isLoading ? (
                 <div className={styles.loading}>
@@ -629,8 +634,8 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                 </div>
               ) : (
                 <>
-                  {getChartView(chartKeys.managerIncome) !== chartTypeIds.verticalId &&
-                    getChartView(chartKeys.managerIncome) !== chartTypeIds.pieId && (
+                  {getChartView(DASHBOARD_CHART_KEYS.managerIncome) !== chartTypeIds.verticalId &&
+                    getChartView(DASHBOARD_CHART_KEYS.managerIncome) !== chartTypeIds.pieId && (
                       <div className={styles.barList}>
                         {managerIncomeSegments.map((item) => (
                           <div key={item.label} className={styles.barRow}>
@@ -653,7 +658,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                         ))}
                       </div>
                     )}
-                  {getChartView(chartKeys.managerIncome) === chartTypeIds.verticalId && (
+                  {getChartView(DASHBOARD_CHART_KEYS.managerIncome) === chartTypeIds.verticalId && (
                     <VerticalBarChart
                       ariaLabel="Доход по менеджерам"
                       emptyText="Сделок пока нет"
@@ -665,7 +670,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                       }))}
                     />
                   )}
-                  {getChartView(chartKeys.managerIncome) === chartTypeIds.pieId && (
+                  {getChartView(DASHBOARD_CHART_KEYS.managerIncome) === chartTypeIds.pieId && (
                     <PieChart
                       ariaLabel="Доход по менеджерам"
                       emptyText="Сделок пока нет"
@@ -682,7 +687,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           title="Лизинговые"
           subtitle="Все сделки"
           className={styles.chartCard}
-          actions={renderChartActions(chartKeys.leasingAv)}
+          actions={renderChartActions(DASHBOARD_CHART_KEYS.leasingAv)}
         >
           {isLoading ? (
             <div className={styles.loading}>
@@ -691,8 +696,8 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
             </div>
           ) : (
             <>
-              {getChartView(chartKeys.leasingAv) !== chartTypeIds.verticalId &&
-                getChartView(chartKeys.leasingAv) !== chartTypeIds.pieId && (
+              {getChartView(DASHBOARD_CHART_KEYS.leasingAv) !== chartTypeIds.verticalId &&
+                getChartView(DASHBOARD_CHART_KEYS.leasingAv) !== chartTypeIds.pieId && (
                   <div className={styles.barList}>
                     {leasingSegments.map((item) => (
                       <div key={item.label} className={styles.barRow}>
@@ -716,7 +721,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                     ))}
                   </div>
                 )}
-              {getChartView(chartKeys.leasingAv) === chartTypeIds.verticalId && (
+              {getChartView(DASHBOARD_CHART_KEYS.leasingAv) === chartTypeIds.verticalId && (
                 <VerticalBarChart
                   ariaLabel="Лизинговые"
                   emptyText="Сделок пока нет"
@@ -728,7 +733,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                   }))}
                 />
               )}
-              {getChartView(chartKeys.leasingAv) === chartTypeIds.pieId && (
+              {getChartView(DASHBOARD_CHART_KEYS.leasingAv) === chartTypeIds.pieId && (
                 <PieChart
                   ariaLabel="Лизинговые"
                   emptyText="Сделок пока нет"
@@ -743,7 +748,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           title="Этапы сделки"
           subtitle="Все сделки"
           className={styles.chartCard}
-          actions={renderChartActions(chartKeys.stageAv)}
+          actions={renderChartActions(DASHBOARD_CHART_KEYS.stageAv)}
         >
           {isLoading ? (
             <div className={styles.loading}>
@@ -752,8 +757,8 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
             </div>
           ) : (
             <>
-              {getChartView(chartKeys.stageAv) !== chartTypeIds.verticalId &&
-                getChartView(chartKeys.stageAv) !== chartTypeIds.pieId && (
+              {getChartView(DASHBOARD_CHART_KEYS.stageAv) !== chartTypeIds.verticalId &&
+                getChartView(DASHBOARD_CHART_KEYS.stageAv) !== chartTypeIds.pieId && (
                   <div className={styles.barList}>
                     {stageSegments.map((item) => (
                       <div key={item.label} className={styles.barRow}>
@@ -777,7 +782,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                     ))}
                   </div>
                 )}
-              {getChartView(chartKeys.stageAv) === chartTypeIds.verticalId && (
+              {getChartView(DASHBOARD_CHART_KEYS.stageAv) === chartTypeIds.verticalId && (
                 <VerticalBarChart
                   ariaLabel="Этапы сделки"
                   emptyText="Сделок пока нет"
@@ -789,7 +794,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                   }))}
                 />
               )}
-              {getChartView(chartKeys.stageAv) === chartTypeIds.pieId && (
+              {getChartView(DASHBOARD_CHART_KEYS.stageAv) === chartTypeIds.pieId && (
                 <PieChart
                   ariaLabel="Этапы сделки"
                   emptyText="Сделок пока нет"

@@ -7,6 +7,7 @@ import { DashboardsPage } from "./pages/DashboardsPage/DashboardsPage";
 import { DealsPage } from "./pages/DealsPage/DealsPage";
 import { LoginPage } from "./pages/LoginPage/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage/SettingsPage";
+import { APP_ROUTES, APP_ROUTE_SEGMENTS } from "./constants/routes";
 import type { CurrentUser } from "./types/user";
 
 interface CreateAppRouterOptions {
@@ -22,11 +23,11 @@ const redirect = (to: string) => <Navigate to={to} replace />;
 
 const protectedPage = (currentUser: CurrentUser | null, page: ReactNode) => {
   if (!currentUser) {
-    return redirect("/login");
+    return redirect(APP_ROUTES.login);
   }
 
   if (currentUser.mustChangePassword) {
-    return redirect("/");
+    return redirect(APP_ROUTES.root);
   }
 
   return page;
@@ -42,11 +43,11 @@ export const createAppRouter = ({
 }: CreateAppRouterOptions) =>
   createBrowserRouter([
     {
-      path: "/login",
-      element: currentUser ? redirect("/") : <LoginPage onLogin={onLogin} />,
+      path: APP_ROUTES.login,
+      element: currentUser ? redirect(APP_ROUTES.root) : <LoginPage onLogin={onLogin} />,
     },
     {
-      path: "/",
+      path: APP_ROUTES.root,
       element: currentUser ? (
         <AppShell
           currentUser={currentUser}
@@ -55,53 +56,55 @@ export const createAppRouter = ({
           onPasswordChanged={onPasswordChanged}
         />
       ) : (
-        redirect("/login")
+        redirect(APP_ROUTES.login)
       ),
       children: [
         {
           index: true,
-          element: currentUser?.mustChangePassword ? redirect("settings") : redirect("deals"),
+          element: currentUser?.mustChangePassword
+            ? redirect(APP_ROUTE_SEGMENTS.settings)
+            : redirect(APP_ROUTE_SEGMENTS.deals),
         },
         {
-          path: "companies",
+          path: APP_ROUTE_SEGMENTS.companies,
           element: protectedPage(
             currentUser,
             currentUser && <CompaniesPage currentUser={currentUser} />,
           ),
         },
         {
-          path: "companies/:companyId",
+          path: APP_ROUTE_SEGMENTS.companyDetails,
           element: protectedPage(
             currentUser,
             currentUser && <CompanyDetailsPage currentUser={currentUser} />,
           ),
         },
         {
-          path: "deals",
+          path: APP_ROUTE_SEGMENTS.deals,
           element: protectedPage(
             currentUser,
             currentUser && <DealsPage currentUser={currentUser} />,
           ),
         },
         {
-          path: "dashboards",
+          path: APP_ROUTE_SEGMENTS.dashboards,
           element: protectedPage(
             currentUser,
             currentUser && <DashboardsPage currentUser={currentUser} />,
           ),
         },
         {
-          path: "settings",
+          path: APP_ROUTE_SEGMENTS.settings,
           element: currentUser ? (
             <SettingsPage currentUser={currentUser} onCurrentUserUpdated={onCurrentUserUpdated} />
           ) : (
-            redirect("/login")
+            redirect(APP_ROUTES.login)
           ),
         },
       ],
     },
     {
       path: "*",
-      element: redirect(currentUser ? "/" : "/login"),
+      element: redirect(currentUser ? APP_ROUTES.root : APP_ROUTES.login),
     },
   ]);

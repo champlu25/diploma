@@ -7,6 +7,7 @@ import { Alert } from "../ui/Alert/Alert";
 import { ChangePasswordModal } from "../ChangePasswordModal/ChangePasswordModal";
 import { IconButton } from "../ui/IconButton/IconButton";
 import { Icon } from "../ui/Icon/Icon";
+import { APP_ROUTES } from "../../constants/routes";
 import styles from "./AppShell.module.scss";
 
 interface AppShellProps {
@@ -24,10 +25,10 @@ export function AppShell({
 }: AppShellProps) {
   const location = useLocation();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const isCompaniesActive = location.pathname.startsWith("/companies");
-  const isDealsActive = location.pathname.startsWith("/deals");
-  const isDashboardsActive = location.pathname.startsWith("/dashboards");
-  const isSettingsActive = location.pathname.startsWith("/settings");
+  const isCompaniesActive = location.pathname.startsWith(APP_ROUTES.companies);
+  const isDealsActive = location.pathname.startsWith(APP_ROUTES.deals);
+  const isDashboardsActive = location.pathname.startsWith(APP_ROUTES.dashboards);
+  const isSettingsActive = location.pathname.startsWith(APP_ROUTES.settings);
 
   useEffect(() => {
     if (currentUser.mustChangePassword) {
@@ -41,15 +42,21 @@ export function AppShell({
         <div className={styles.brand}>БЛИК CRM</div>
 
         <nav className={styles.nav} aria-label="Навигация">
-          <Link to="/companies" className={clsx(styles.link, isCompaniesActive && styles.active)}>
+          <Link
+            to={APP_ROUTES.companies}
+            className={clsx(styles.link, isCompaniesActive && styles.active)}
+          >
             <Icon name="companies" size={16} />
             Компании
           </Link>
-          <Link to="/deals" className={clsx(styles.link, isDealsActive && styles.active)}>
+          <Link to={APP_ROUTES.deals} className={clsx(styles.link, isDealsActive && styles.active)}>
             <Icon name="deals" size={16} />
             Сделки
           </Link>
-          <Link to="/dashboards" className={clsx(styles.link, isDashboardsActive && styles.active)}>
+          <Link
+            to={APP_ROUTES.dashboards}
+            className={clsx(styles.link, isDashboardsActive && styles.active)}
+          >
             <Icon name="dashboards" size={16} />
             Дашборды
           </Link>
@@ -62,7 +69,7 @@ export function AppShell({
           </div>
 
           <Link
-            to="/settings"
+            to={APP_ROUTES.settings}
             className={clsx(styles.iconLink, isSettingsActive && styles.iconLinkActive)}
             aria-label="Настройки"
             title="Настройки"

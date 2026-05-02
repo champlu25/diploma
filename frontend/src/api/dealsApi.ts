@@ -1,4 +1,5 @@
 import { httpClient } from "./httpClient";
+import { API_ROUTES } from "../constants/api";
 import type { Deal, DealFormValues, DealLookups } from "../types/deal";
 
 interface DealDto {
@@ -82,19 +83,19 @@ const toPayload = (values: DealFormValues) => ({
 });
 
 export const getDeals = async (): Promise<Deal[]> => {
-  const { data } = await httpClient.get<ListDealsResponse>("/api/deals");
+  const { data } = await httpClient.get<ListDealsResponse>(API_ROUTES.deals);
   return data.deals.map(toDeal);
 };
 
 export const getDealsByCompanyId = async (companyId: number): Promise<Deal[]> => {
-  const { data } = await httpClient.get<ListDealsResponse>("/api/deals", {
+  const { data } = await httpClient.get<ListDealsResponse>(API_ROUTES.deals, {
     params: { companyId },
   });
   return data.deals.map(toDeal);
 };
 
 export const getDealLookups = async (): Promise<DealLookups> => {
-  const { data } = await httpClient.get<LookupsResponse>("/api/deals/lookups");
+  const { data } = await httpClient.get<LookupsResponse>(API_ROUTES.dealLookups);
   return data;
 };
 
@@ -103,7 +104,7 @@ export const createDeal = async (
   values: DealFormValues,
 ): Promise<DealResponse> => {
   const { data } = await httpClient.post<DealDtoResponse>(
-    `/api/companies/${companyId}/deals`,
+    API_ROUTES.companyDeals(companyId),
     toPayload(values),
   );
 
@@ -115,7 +116,7 @@ export const createDeal = async (
 
 export const updateDeal = async (dealId: number, values: DealFormValues): Promise<DealResponse> => {
   const { data } = await httpClient.patch<DealDtoResponse>(
-    `/api/deals/${dealId}`,
+    API_ROUTES.dealById(dealId),
     toPayload(values),
   );
   return {
@@ -125,7 +126,7 @@ export const updateDeal = async (dealId: number, values: DealFormValues): Promis
 };
 
 export const deleteDeal = async (dealId: number): Promise<DeleteDealResponse> => {
-  const { data } = await httpClient.delete<DeleteDealResponse>(`/api/deals/${dealId}`);
+  const { data } = await httpClient.delete<DeleteDealResponse>(API_ROUTES.dealById(dealId));
   return data;
 };
 
@@ -133,12 +134,9 @@ export const updateDealLifecycleStatus = async (
   dealId: number,
   dealLifecycleStatusId: number,
 ): Promise<DealResponse> => {
-  const { data } = await httpClient.patch<DealDtoResponse>(
-    `/api/deals/${dealId}/lifecycle-status`,
-    {
-      dealLifecycleStatusId,
-    },
-  );
+  const { data } = await httpClient.patch<DealDtoResponse>(API_ROUTES.dealLifecycleStatus(dealId), {
+    dealLifecycleStatusId,
+  });
 
   return {
     ...data,
