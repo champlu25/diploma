@@ -7,20 +7,20 @@ import { DashboardsPage } from "./pages/DashboardsPage/DashboardsPage";
 import { DealsPage } from "./pages/DealsPage/DealsPage";
 import { LoginPage } from "./pages/LoginPage/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage/SettingsPage";
-import type { AuthUser } from "./types/user";
+import type { CurrentUser } from "./types/user";
 
 interface CreateAppRouterOptions {
-  currentUser: AuthUser | null;
+  currentUser: CurrentUser | null;
   sessionError: string | null;
-  onLogin: (user: AuthUser) => void;
+  onLogin: (user: CurrentUser) => void;
   onLogout: () => Promise<void>;
   onPasswordChanged: () => void | Promise<void>;
-  onCurrentUserUpdated: (user: AuthUser) => void;
+  onCurrentUserUpdated: (user: CurrentUser) => void;
 }
 
 const redirect = (to: string) => createElement(Navigate, { to, replace: true });
 
-const protectedPage = (currentUser: AuthUser | null, page: ReactNode) => {
+const protectedPage = (currentUser: CurrentUser | null, page: ReactNode) => {
   if (!currentUser) {
     return redirect("/login");
   }

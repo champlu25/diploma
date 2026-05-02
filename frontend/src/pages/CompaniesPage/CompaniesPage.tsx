@@ -13,7 +13,7 @@ import { createDeal, getDealLookups } from "../../api/dealsApi";
 import { getGroupLeadManagers, getTransferTargets, getUsers } from "../../api/usersApi";
 import type { Company, CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { DealFormValues, DealLookups } from "../../types/deal";
-import type { AuthUser, User } from "../../types/user";
+import type { CurrentUser, User } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
@@ -27,7 +27,7 @@ import { Spinner } from "../../components/ui/Spinner/Spinner";
 import styles from "./CompaniesPage.module.scss";
 
 interface CompaniesPageProps {
-  currentUser: AuthUser;
+  currentUser: CurrentUser;
 }
 
 type CompanyValidationErrors = Partial<Record<keyof CompanyFormValues, string>>;

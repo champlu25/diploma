@@ -3,12 +3,12 @@ import { RouterProvider } from "react-router-dom";
 import { getCurrentUser, logout } from "./api/authApi";
 import { Spinner } from "./components/ui/Spinner/Spinner";
 import { createAppRouter } from "./router";
-import type { AuthUser } from "./types/user";
+import type { CurrentUser } from "./types/user";
 import { getApiErrorMessage } from "./utils/httpError";
 import styles from "./styles/App.module.scss";
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -50,7 +50,7 @@ function App() {
     }
   }, []);
 
-  const handleLogin = useCallback((user: AuthUser) => {
+  const handleLogin = useCallback((user: CurrentUser) => {
     setCurrentUser(user);
     setSessionError(null);
   }, []);
@@ -64,7 +64,7 @@ function App() {
     }
   }, []);
 
-  const handleCurrentUserUpdated = useCallback((nextUser: AuthUser) => {
+  const handleCurrentUserUpdated = useCallback((nextUser: CurrentUser) => {
     setCurrentUser(nextUser);
   }, []);
 

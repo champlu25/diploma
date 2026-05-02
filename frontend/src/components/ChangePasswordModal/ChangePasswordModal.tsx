@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { changePassword } from "../../api/authApi";
-import type { AuthUser } from "../../types/user";
+import type { CurrentUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { Alert } from "../ui/Alert/Alert";
 import { Button } from "../ui/Button/Button";
@@ -11,7 +11,7 @@ import { Spinner } from "../ui/Spinner/Spinner";
 import styles from "./ChangePasswordModal.module.scss";
 
 interface ChangePasswordModalProps {
-  currentUser: AuthUser;
+  currentUser: CurrentUser;
   open: boolean;
   onClose: () => void;
   onPasswordChanged?: () => void | Promise<void>;

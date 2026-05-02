@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../../api/authApi";
-import type { AuthUser } from "../../types/user";
+import type { CurrentUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
@@ -12,7 +12,7 @@ import { Spinner } from "../../components/ui/Spinner/Spinner";
 import styles from "./LoginPage.module.scss";
 
 interface LoginPageProps {
-  onLogin: (user: AuthUser) => void;
+  onLogin: (user: CurrentUser) => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {

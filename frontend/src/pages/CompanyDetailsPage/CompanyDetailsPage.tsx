@@ -12,12 +12,12 @@ import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import type { CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { Deal } from "../../types/deal";
-import type { AuthUser } from "../../types/user";
+import type { CurrentUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import styles from "./CompanyDetailsPage.module.scss";
 
 interface CompanyDetailsPageProps {
-  currentUser: AuthUser;
+  currentUser: CurrentUser;
 }
 
 const formatDateTime = (value: string | null) => {

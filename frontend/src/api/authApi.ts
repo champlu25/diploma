@@ -1,15 +1,15 @@
 import axios from "axios";
 import { httpClient } from "./httpClient";
-import type { AuthUser } from "../types/user";
+import type { CurrentUser } from "../types/user";
 
 interface AuthResponse {
-  user: AuthUser;
+  user: CurrentUser;
 }
 
 export const login = async (
   username: string,
   password: string,
-): Promise<AuthUser> => {
+): Promise<CurrentUser> => {
   const { data } = await httpClient.post<AuthResponse>("/api/auth/login", {
     username,
     password,
@@ -22,7 +22,7 @@ export const logout = async (): Promise<void> => {
   await httpClient.post("/api/auth/logout");
 };
 
-export const getCurrentUser = async (): Promise<AuthUser | null> => {
+export const getCurrentUser = async (): Promise<CurrentUser | null> => {
   try {
     const { data } = await httpClient.get<AuthResponse>("/api/auth/me");
     return data.user;
@@ -43,7 +43,7 @@ export const updateCurrentUserProfile = async (params: {
   lastName: string | null;
   firstName: string | null;
   middleName: string | null;
-}): Promise<AuthUser> => {
+}): Promise<CurrentUser> => {
   const { data } = await httpClient.patch<AuthResponse>("/api/auth/me", params);
   return data.user;
 };

@@ -1,4 +1,4 @@
-﻿import { httpClient } from "./httpClient";
+import { httpClient } from "./httpClient";
 import type { User, UserRole } from "../types/user";
 
 interface UserDto {

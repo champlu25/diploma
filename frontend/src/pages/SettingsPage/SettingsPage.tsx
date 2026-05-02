@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import type { AuthUser, User } from "../../types/user";
+import type { CurrentUser, User } from "../../types/user";
 import { updateCurrentUserProfile } from "../../api/authApi";
 import {
   createUser,
@@ -42,8 +42,8 @@ import { getRoleLabel } from "../../utils/roles";
 import styles from "./SettingsPage.module.scss";
 
 interface SettingsPageProps {
-  currentUser: AuthUser;
-  onCurrentUserUpdated: (nextUser: AuthUser) => void;
+  currentUser: CurrentUser;
+  onCurrentUserUpdated: (nextUser: CurrentUser) => void;
 }
 
 interface AppShellOutletContext {

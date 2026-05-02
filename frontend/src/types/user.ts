@@ -1,6 +1,6 @@
 export type UserRole = "owner" | "manager" | "group_lead";
 
-export interface AuthUser {
+export interface CurrentUser {
   id: number;
   username: string;
   lastName: string | null;
@@ -12,7 +12,7 @@ export interface AuthUser {
   groupLeadUsername?: string | null;
 }
 
-export interface User extends AuthUser {
+export interface User extends CurrentUser {
   createdAt: string;
   updatedAt: string;
 }

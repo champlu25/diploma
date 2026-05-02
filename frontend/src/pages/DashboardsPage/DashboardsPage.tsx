@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import type { AuthUser } from "../../types/user";
+import type { CurrentUser } from "../../types/user";
 import { getDeals } from "../../api/dealsApi";
 import { getChartViewSettings, saveChartViewSetting } from "../../api/dashboardsApi";
 import type { Deal } from "../../types/deal";
@@ -15,7 +15,7 @@ import { VerticalBarChart } from "../../components/charts/VerticalBarChart/Verti
 import styles from "./DashboardsPage.module.scss";
 
 interface DashboardsPageProps {
-  currentUser: AuthUser;
+  currentUser: CurrentUser;
 }
 
 const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];

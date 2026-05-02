@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import type { AuthUser } from "../../types/user";
+import type { CurrentUser } from "../../types/user";
 import { getRoleLabel } from "../../utils/roles";
 import { Alert } from "../ui/Alert/Alert";
 import { ChangePasswordModal } from "../ChangePasswordModal/ChangePasswordModal";
@@ -10,7 +10,7 @@ import { Icon } from "../ui/Icon/Icon";
 import styles from "./AppShell.module.scss";
 
 interface AppShellProps {
-  currentUser: AuthUser;
+  currentUser: CurrentUser;
   onLogout: () => Promise<void>;
   sessionError: string | null;
   onPasswordChanged?: () => void | Promise<void>;

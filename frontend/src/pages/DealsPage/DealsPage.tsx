@@ -10,7 +10,7 @@ import {
 } from "../../api/dealsApi";
 import { getGroupLeadManagers, getUsers } from "../../api/usersApi";
 import type { Deal, DealFormValues, DealLookups } from "../../types/deal";
-import type { AuthUser } from "../../types/user";
+import type { CurrentUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
@@ -25,7 +25,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import styles from "./DealsPage.module.scss";
 
 interface DealsPageProps {
-  currentUser: AuthUser;
+  currentUser: CurrentUser;
 }
 
 type DealValidationErrors = Partial<Record<keyof DealFormValues, string>>;
