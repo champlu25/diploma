@@ -106,7 +106,9 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
             setChartViews(nextViews);
             setChartTypes(viewSettings.chartTypes);
           }
-        } catch {}
+        } catch {
+          // Chart view settings are optional; the dashboard can render with defaults.
+        }
       } catch (err) {
         if (!isCancelled) setError(getApiErrorMessage(err, "Не удалось загрузить сделки."));
       } finally {

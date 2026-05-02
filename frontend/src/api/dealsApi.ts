@@ -30,7 +30,7 @@ interface ListDealsResponse {
   deals: DealDto[];
 }
 
-interface LookupsResponse extends DealLookups {}
+type LookupsResponse = DealLookups;
 
 interface DealDtoResponse {
   message: string;
