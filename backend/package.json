@@ -2,12 +2,11 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "Leasing CRM backend",
-  "main": "src/index.js",
+  "main": "src/app.js",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
+    "dev": "node --watch src/app.js",
+    "start": "node src/app.js",
     "hash:password": "node src/scripts/generatePasswordHash.js",
-    "bootstrap:owner": "node src/scripts/bootstrapOwner.js",
     "db:reset:seed": "node src/scripts/resetAndSeedDb.js --yes"
   },
   "keywords": [],
