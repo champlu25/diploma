@@ -8,6 +8,7 @@ const authRoutes = require("./routes/authRoutes");
 const companiesRoutes = require("./routes/companiesRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const dealsRoutes = require("./routes/dealsRoutes");
+const docsRoutes = require("./routes/docsRoutes");
 const ownerRoutes = require("./routes/ownerRoutes");
 const usersRoutes = require("./routes/usersRoutes");
 
@@ -29,6 +30,7 @@ app.use(companiesRoutes);
 app.use(dealsRoutes);
 app.use(dashboardRoutes);
 app.use(ownerRoutes);
+app.use(docsRoutes);
 
 const start = async () => {
   app.listen(port, () => {
