@@ -64,8 +64,7 @@ export function AppShell({
 
         <div className={styles.user}>
           <div className={styles.meta}>
-            <div className={styles.email}>{currentUser.username}</div>
-            <div className={styles.role}>{getRoleLabel(currentUser.role)}</div>
+            <div className={styles.email}>{getRoleLabel(currentUser.role)}</div>
           </div>
 
           <Link

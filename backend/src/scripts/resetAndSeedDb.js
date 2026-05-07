@@ -132,6 +132,34 @@ const insertUser = async (
   return result.rows[0];
 };
 
+const seedDefaultChartViewSettings = async (client, users) => {
+  const horizontalChartTypeId = await selectLookupIdByName(client, "chart_types", "Горизонтальный");
+  const verticalChartTypeId = await selectLookupIdByName(client, "chart_types", "Вертикальный");
+  const pieChartTypeId = await selectLookupIdByName(client, "chart_types", "Круговой");
+
+  const defaultSettings = [
+    { chartKey: "manager_deals_count", chartTypeId: pieChartTypeId },
+    { chartKey: "manager_income_rub", chartTypeId: horizontalChartTypeId },
+    { chartKey: "leasing_av_rub", chartTypeId: verticalChartTypeId },
+    { chartKey: "stage_av_rub", chartTypeId: pieChartTypeId },
+  ];
+
+  for (const user of users) {
+    for (const setting of defaultSettings) {
+      await client.query(
+        `
+          INSERT INTO user_chart_view_settings (user_id, chart_key, chart_type_id)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (user_id, chart_key)
+          DO UPDATE SET
+            chart_type_id = EXCLUDED.chart_type_id
+        `,
+        [user.id, setting.chartKey, setting.chartTypeId],
+      );
+    }
+  }
+};
+
 const mulberry32 = (seed) => {
   let a = seed >>> 0;
   return () => {
@@ -165,9 +193,14 @@ const seedTestData = async (client) => {
 
   const credentials = {
     owner: { username: "owner", password: "Password123" },
-    groupLead: { username: "lead", password: "Password123" },
-    manager1: { username: "manager1", password: "Password123" },
-    manager2: { username: "manager2", password: "Password123" },
+    groupLeads: [
+      { username: "lead1", password: "Password123" },
+      { username: "lead2", password: "Password123" },
+    ],
+    managers: Array.from({ length: 7 }, (_item, index) => ({
+      username: `manager${index + 1}`,
+      password: "Password123",
+    })),
   };
 
   const owner = await insertUser(client, {
@@ -178,31 +211,51 @@ const seedTestData = async (client) => {
     middleName: "Иванович",
   });
 
-  const groupLead = await insertUser(client, {
-    ...credentials.groupLead,
+  const groupLead1 = await insertUser(client, {
+    ...credentials.groupLeads[0],
     roleId: groupLeadRoleId,
     lastName: "Петров",
     firstName: "Пётр",
     middleName: "Петрович",
   });
 
-  const manager1 = await insertUser(client, {
-    ...credentials.manager1,
-    roleId: managerRoleId,
-    lastName: "Сидоров",
-    firstName: "Сергей",
-    middleName: "Сергеевич",
-    groupLeadUserId: groupLead.id,
+  const groupLead2 = await insertUser(client, {
+    ...credentials.groupLeads[1],
+    roleId: groupLeadRoleId,
+    lastName: "Морозова",
+    firstName: "Елена",
+    middleName: "Андреевна",
   });
 
-  const manager2 = await insertUser(client, {
-    ...credentials.manager2,
-    roleId: managerRoleId,
-    lastName: "Кузнецова",
-    firstName: "Анна",
-    middleName: "Викторовна",
-    groupLeadUserId: groupLead.id,
-  });
+  const managerProfiles = [
+    ["Сидоров", "Сергей", "Сергеевич"],
+    ["Кузнецова", "Анна", "Викторовна"],
+    ["Смирнов", "Алексей", "Олегович"],
+    ["Васильева", "Мария", "Игоревна"],
+    ["Попов", "Дмитрий", "Александрович"],
+    ["Новикова", "Ольга", "Павловна"],
+    ["Фёдоров", "Никита", "Романович"],
+  ];
+
+  const groupLeads = [groupLead1, groupLead2];
+  const managers = [];
+  for (let i = 0; i < credentials.managers.length; i += 1) {
+    const [lastName, firstName, middleName] = managerProfiles[i];
+    const groupLeadUserId = i < 3 ? groupLead1.id : groupLead2.id;
+
+    managers.push(
+      await insertUser(client, {
+        ...credentials.managers[i],
+        roleId: managerRoleId,
+        lastName,
+        firstName,
+        middleName,
+        groupLeadUserId,
+      }),
+    );
+  }
+
+  await seedDefaultChartViewSettings(client, [owner, ...groupLeads, ...managers]);
 
   const dealStatusesResult = await client.query(`SELECT id, name FROM deal_statuses ORDER BY id ASC`);
   const dealLifecyclesResult = await client.query(`SELECT id, name FROM deal_lifecycle_statuses ORDER BY id ASC`);
@@ -250,7 +303,6 @@ const seedTestData = async (client) => {
   const communicationChannelIds = communicationChannelsResult.rows.map((row) => row.id);
 
   // Seed more data so dashboards have something to plot.
-  // Keep users as-is (4 accounts), but create more companies and deals.
   const rng = mulberry32(20260430);
 
   const companies = [];
@@ -301,7 +353,7 @@ const seedTestData = async (client) => {
 
   const companyCount = 24;
   for (let i = 0; i < companyCount; i += 1) {
-    const managerUserId = i % 2 === 0 ? manager1.id : manager2.id;
+    const managerUserId = managers[i % managers.length].id;
     const baseName = companyNamePool[i % companyNamePool.length];
     const suffix = i < companyNamePool.length ? "" : ` ${i + 1}`;
     const name = `${baseName}${suffix}`;
@@ -491,7 +543,7 @@ const seedTestData = async (client) => {
     );
   }
 
-  return { credentials, users: { owner, groupLead, manager1, manager2 } };
+  return { credentials, users: { owner, groupLeads, managers } };
 };
 
 const main = async () => {
@@ -559,15 +611,12 @@ const main = async () => {
     console.log(
       `- owner: ${seedResult.credentials.owner.username} / ${seedResult.credentials.owner.password}`,
     );
-    console.log(
-      `- group_lead: ${seedResult.credentials.groupLead.username} / ${seedResult.credentials.groupLead.password}`,
-    );
-    console.log(
-      `- manager1: ${seedResult.credentials.manager1.username} / ${seedResult.credentials.manager1.password}`,
-    );
-    console.log(
-      `- manager2: ${seedResult.credentials.manager2.username} / ${seedResult.credentials.manager2.password}`,
-    );
+    seedResult.credentials.groupLeads.forEach((credentials, index) => {
+      console.log(`- group_lead${index + 1}: ${credentials.username} / ${credentials.password}`);
+    });
+    seedResult.credentials.managers.forEach((credentials, index) => {
+      console.log(`- manager${index + 1}: ${credentials.username} / ${credentials.password}`);
+    });
   } catch (error) {
     try {
       await dbClient.query("ROLLBACK");

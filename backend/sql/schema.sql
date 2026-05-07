@@ -171,9 +171,8 @@ ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO communication_channels (name) VALUES
 ('Телефон'),
-('WhatsApp'),
-('Telegram'),
-('Email')
+('Почта'),
+('Мессенджер')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO deal_statuses (name) VALUES
@@ -190,7 +189,12 @@ ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO leasing_companies (name) VALUES
 ('ВТБЛизинг'),
-('СберЛизинг')
+('СберЛизинг'),
+('Газпромбанк Лизинг'),
+('Альфа-Лизинг'),
+('Европлан'),
+('Балтийский лизинг'),
+('Интерлизинг')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO deal_stages (name) VALUES
