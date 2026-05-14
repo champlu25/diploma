@@ -1177,7 +1177,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                 value={communicationChannelName}
                 onChange={(event) => setCommunicationChannelName(event.target.value)}
                 disabled={isCommunicationChannelCreating}
-                placeholder="например: WhatsApp"
+                placeholder="например: Мессенджер"
                 required
               />
               <Button type="submit" disabled={isCommunicationChannelCreating}>

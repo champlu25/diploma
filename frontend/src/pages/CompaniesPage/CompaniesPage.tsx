@@ -296,6 +296,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [searchName, setSearchName] = useState("");
   const [searchInn, setSearchInn] = useState("");
   const [managerFilterUserId, setManagerFilterUserId] = useState("");
+  const [companySortMode, setCompanySortMode] = useState("created_desc");
   const [managerFilterOptions, setManagerFilterOptions] = useState<SelectFieldOption[]>([
     { value: "", label: "Все менеджеры" },
   ]);
@@ -346,14 +347,19 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await getCompanies();
+      const data = await getCompanies({
+        searchName,
+        searchInn,
+        managerUserId: managerFilterUserId,
+        sort: companySortMode,
+      });
       setCompanies(data);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось загрузить компании."));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [companySortMode, managerFilterUserId, searchInn, searchName]);
 
   useEffect(() => {
     void loadCompanies();
@@ -401,6 +407,11 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   }, []);
 
   const showManagerFilter = currentUser.role === "owner" || currentUser.role === "group_lead";
+
+  const companySortOptions: SelectFieldOption[] = [
+    { value: "created_desc", label: "По дате создания (сначала новые)" },
+    { value: "name_asc", label: "По наименованию (А–Я)" },
+  ];
 
   useEffect(() => {
     if (!showManagerFilter) {
@@ -478,18 +489,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     }
   }, [managerFilterOptions, managerFilterUserId, showManagerFilter]);
 
-  const filteredCompanies = useMemo(() => {
-    const nameFilter = searchName.trim().toLowerCase();
-    const innFilter = searchInn.trim();
-
-    return companies.filter((company) => {
-      const matchesName = !nameFilter || company.name.toLowerCase().includes(nameFilter);
-      const matchesInn = !innFilter || company.inn.includes(innFilter);
-      const matchesManager =
-        !managerFilterUserId || String(company.managerUserId) === managerFilterUserId;
-      return matchesName && matchesInn && matchesManager;
-    });
-  }, [companies, managerFilterUserId, searchInn, searchName]);
+  const filteredCompanies = companies;
 
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -504,8 +504,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     try {
       setIsCreateSubmitting(true);
       setError(null);
-      const result = await createCompany(createForm);
-      setCompanies((prev) => [...prev, result.company]);
+      await createCompany(createForm);
+      await loadCompanies();
       setCreateForm(emptyForm);
       setCreateErrors({});
       setIsCreateModalOpen(false);
@@ -612,10 +612,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     try {
       setIsEditSubmitting(true);
       setError(null);
-      const result = await updateCompany(editingCompany.id, editForm);
-      setCompanies((prev) =>
-        prev.map((item) => (item.id === editingCompany.id ? result.company : item)),
-      );
+      await updateCompany(editingCompany.id, editForm);
+      await loadCompanies();
       closeEditModal();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить компанию."));
@@ -687,7 +685,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     try {
       setIsDeleteSubmittingId(company.id);
       await deleteCompany(company.id);
-      setCompanies((prev) => prev.filter((item) => item.id !== company.id));
+      await loadCompanies();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось удалить компанию."));
     } finally {
@@ -808,7 +806,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Поиск по наименованию"
             value={searchName}
             onChange={(event) => setSearchName(event.target.value)}
-            placeholder="Например: ООО Ромашка"
+            placeholder='Например: ООО "Ромашка"'
           />
         </div>
         <div className={styles.filtersGrow}>
@@ -818,6 +816,14 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             onChange={(event) => setSearchInn(event.target.value)}
             placeholder="10 или 12 цифр"
             inputMode="numeric"
+          />
+        </div>
+        <div className={styles.filtersGrow}>
+          <SelectField
+            label="Сортировка"
+            value={companySortMode}
+            onChange={(event) => setCompanySortMode(event.target.value)}
+            options={companySortOptions}
           />
         </div>
         {showManagerFilter && (

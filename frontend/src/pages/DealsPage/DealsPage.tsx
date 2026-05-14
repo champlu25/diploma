@@ -4,7 +4,6 @@ import {
   deleteDeal,
   getDealLookups,
   getDeals,
-  getDealsByCompanyId,
   updateDeal,
   updateDealLifecycleStatus,
 } from "../../api/dealsApi";
@@ -140,6 +139,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const [searchCompanyName, setSearchCompanyName] = useState("");
   const [searchInn, setSearchInn] = useState("");
   const [managerFilterUserId, setManagerFilterUserId] = useState("");
+  const [dealSortMode, setDealSortMode] = useState("created_desc");
+  const [hotColdFilter, setHotColdFilter] = useState("");
+  const [dealStageFilter, setDealStageFilter] = useState("");
   const [managerFilterOptions, setManagerFilterOptions] = useState<
     { value: string; label: string }[]
   >([{ value: "", label: "Все менеджеры" }]);
@@ -176,6 +178,24 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   );
 
   const showManagerFilter = currentUser.role === "owner" || currentUser.role === "group_lead";
+  const dealSortOptions = useMemo(
+    () => [
+      { value: "created_desc", label: "По дате создания (сначала новые)" },
+      { value: "company_asc", label: "По компании (А–Я)" },
+      { value: "advance_desc", label: "По АВ руб (сначала больше)" },
+    ],
+    [],
+  );
+  const dealStageOptions = useMemo(
+    () => [
+      { value: "", label: "Все этапы" },
+      ...(lookups?.dealStages ?? []).map((item) => ({
+        value: String(item.id),
+        label: item.name,
+      })),
+    ],
+    [lookups],
+  );
 
   useEffect(() => {
     if (!showManagerFilter) return;
@@ -251,39 +271,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     }
   }, [managerFilterOptions, managerFilterUserId, showManagerFilter]);
 
-  const filteredDeals = useMemo(() => {
-    const queryName = searchCompanyName.trim().toLowerCase();
-    const queryInn = searchInn.trim();
-    const hasFixedCompanyId = fixedCompany.companyId !== null;
-
-    return deals.filter((deal) => {
-      if (hasFixedCompanyId && String(deal.companyId) !== fixedCompany.companyId) {
-        return false;
-      }
-      if (selectedLifecycleStatusId && deal.dealLifecycleStatusId !== selectedLifecycleStatusId) {
-        return false;
-      }
-      if (managerFilterUserId && String(deal.companyManagerUserId) !== managerFilterUserId) {
-        return false;
-      }
-      if (!hasFixedCompanyId) {
-        if (queryName && !deal.companyName.toLowerCase().includes(queryName)) {
-          return false;
-        }
-        if (queryInn && !deal.companyInn.includes(queryInn)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [
-    deals,
-    fixedCompany.companyId,
-    managerFilterUserId,
-    searchCompanyName,
-    searchInn,
-    selectedLifecycleStatusId,
-  ]);
+  const filteredDeals = deals;
 
   const fixedCompanyTitle = useMemo(() => {
     if (!fixedCompany.companyId) return null;
@@ -314,7 +302,16 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       setError(null);
 
       const [nextDeals, nextLookups] = await Promise.all([
-        fixedCompany.companyId ? getDealsByCompanyId(Number(fixedCompany.companyId)) : getDeals(),
+        getDeals({
+          companyId: fixedCompany.companyId ? Number(fixedCompany.companyId) : undefined,
+          searchCompanyName,
+          searchInn,
+          managerUserId: managerFilterUserId,
+          lifecycleStatusId: selectedLifecycleStatusId,
+          dealStageId: dealStageFilter,
+          hotCold: hotColdFilter,
+          sort: dealSortMode,
+        }),
         getDealLookups(),
       ]);
       setDeals(nextDeals);
@@ -324,7 +321,16 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [fixedCompany.companyId]);
+  }, [
+    dealSortMode,
+    dealStageFilter,
+    fixedCompany.companyId,
+    hotColdFilter,
+    managerFilterUserId,
+    searchCompanyName,
+    searchInn,
+    selectedLifecycleStatusId,
+  ]);
 
   useEffect(() => {
     void loadDeals();
@@ -412,8 +418,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       setIsEditSubmitting(true);
       setError(null);
 
-      const result = await updateDeal(editingDeal.id, editForm);
-      setDeals((prev) => prev.map((item) => (item.id === editingDeal.id ? result.deal : item)));
+      await updateDeal(editingDeal.id, editForm);
+      await loadDeals();
       closeEditModal();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить сделку."));
@@ -465,8 +471,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         return;
       }
 
-      const result = await updateDeal(detailsDeal.id, payload);
-      setDeals((prev) => prev.map((item) => (item.id === detailsDeal.id ? result.deal : item)));
+      await updateDeal(detailsDeal.id, payload);
+      await loadDeals();
       closeDetailsModal();
     } catch (requestError) {
       setDetailsError(getApiErrorMessage(requestError, "Не удалось обновить сделку."));
@@ -486,7 +492,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     try {
       setIsDeleteSubmittingId(deal.id);
       await deleteDeal(deal.id);
-      setDeals((prev) => prev.filter((item) => item.id !== deal.id));
+      await loadDeals();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось удалить сделку."));
     } finally {
@@ -508,8 +514,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       setIsLifecycleSubmittingId(deal.id);
       setError(null);
 
-      const result = await updateDealLifecycleStatus(deal.id, parsed);
-      setDeals((prev) => prev.map((item) => (item.id === deal.id ? result.deal : item)));
+      await updateDealLifecycleStatus(deal.id, parsed);
+      await loadDeals();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось изменить статус сделки."));
     } finally {
@@ -532,7 +538,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             label="Фильтр по компании"
             value={searchCompanyName}
             onChange={(event) => setSearchCompanyName(event.target.value)}
-            placeholder="Например: ООО Ромашка"
+            placeholder='Например: ООО "Ромашка"'
             disabled={Boolean(fixedCompany.companyId)}
           />
         </div>
@@ -544,6 +550,34 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             placeholder="10 или 12 цифр"
             inputMode="numeric"
             disabled={Boolean(fixedCompany.companyId)}
+          />
+        </div>
+        <div className={styles.filtersGrow}>
+          <SelectField
+            label="Сортировка"
+            value={dealSortMode}
+            onChange={(event) => setDealSortMode(event.target.value)}
+            options={dealSortOptions}
+          />
+        </div>
+        <div className={styles.filtersGrow}>
+          <SelectField
+            label="Горячие / холодные"
+            value={hotColdFilter}
+            onChange={(event) => setHotColdFilter(event.target.value)}
+            options={[
+              { value: "", label: "Все сделки" },
+              { value: "hot", label: "Горячие" },
+              { value: "cold", label: "Холодные" },
+            ]}
+          />
+        </div>
+        <div className={styles.filtersGrow}>
+          <SelectField
+            label="Этап"
+            value={dealStageFilter}
+            onChange={(event) => setDealStageFilter(event.target.value)}
+            options={dealStageOptions}
           />
         </div>
         {showManagerFilter && (

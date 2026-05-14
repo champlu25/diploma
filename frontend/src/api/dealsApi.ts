@@ -2,6 +2,17 @@ import { httpClient } from "./httpClient";
 import { API_ROUTES } from "../constants/api";
 import type { Deal, DealFormValues, DealLookups } from "../types/deal";
 
+export interface GetDealsParams {
+  companyId?: number;
+  searchCompanyName?: string;
+  searchInn?: string;
+  managerUserId?: string;
+  lifecycleStatusId?: number | null;
+  dealStageId?: string;
+  hotCold?: string;
+  sort?: string;
+}
+
 interface DealDto {
   id: number;
   company_id: number;
@@ -82,16 +93,15 @@ const toPayload = (values: DealFormValues) => ({
   comment: values.comment,
 });
 
-export const getDeals = async (): Promise<Deal[]> => {
-  const { data } = await httpClient.get<ListDealsResponse>(API_ROUTES.deals);
+export const getDeals = async (params?: GetDealsParams): Promise<Deal[]> => {
+  const { data } = await httpClient.get<ListDealsResponse>(API_ROUTES.deals, {
+    params,
+  });
   return data.deals.map(toDeal);
 };
 
 export const getDealsByCompanyId = async (companyId: number): Promise<Deal[]> => {
-  const { data } = await httpClient.get<ListDealsResponse>(API_ROUTES.deals, {
-    params: { companyId },
-  });
-  return data.deals.map(toDeal);
+  return getDeals({ companyId });
 };
 
 export const getDealLookups = async (): Promise<DealLookups> => {

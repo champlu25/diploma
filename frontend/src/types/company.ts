@@ -4,6 +4,7 @@ export interface Company {
   managerName: string;
   name: string;
   inn: string;
+  revenueRub: number | null;
   contactName: string | null;
   phone: string | null;
   email: string | null;

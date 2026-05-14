@@ -2,12 +2,20 @@ import { httpClient } from "./httpClient";
 import { API_ROUTES } from "../constants/api";
 import type { Company, CompanyDetails, CompanyFormValues } from "../types/company";
 
+export interface GetCompaniesParams {
+  searchName?: string;
+  searchInn?: string;
+  managerUserId?: string;
+  sort?: string;
+}
+
 interface CompanyDto {
   id: number;
   manager_user_id: number;
   manager_name: string;
   name: string;
   inn: string;
+  revenue_rub?: number | null;
   contact_name: string | null;
   phone: string | null;
   email: string | null;
@@ -17,7 +25,6 @@ interface CompanyDto {
   actual_address?: string | null;
   director_birth_date?: string | null;
   activity?: string | null;
-  revenue_rub?: number | null;
   negative_info?: string | null;
   tax_system_id?: number | null;
   tax_system_name?: string | null;
@@ -72,6 +79,7 @@ const toCompany = (dto: CompanyDto): Company => ({
   managerName: dto.manager_name,
   name: dto.name,
   inn: dto.inn,
+  revenueRub: typeof dto.revenue_rub === "number" ? dto.revenue_rub : (dto.revenue_rub ?? null),
   contactName: dto.contact_name,
   phone: dto.phone,
   email: dto.email,
@@ -119,8 +127,10 @@ const toCompanyDetails = (dto: CompanyDto): CompanyDetails => ({
   preferredCommunicationChannelName: dto.preferred_communication_channel_name ?? null,
 });
 
-export const getCompanies = async (): Promise<Company[]> => {
-  const { data } = await httpClient.get<ListCompaniesResponse>(API_ROUTES.companies);
+export const getCompanies = async (params?: GetCompaniesParams): Promise<Company[]> => {
+  const { data } = await httpClient.get<ListCompaniesResponse>(API_ROUTES.companies, {
+    params,
+  });
   return data.companies.map(toCompany);
 };
 

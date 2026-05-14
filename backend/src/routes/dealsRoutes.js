@@ -82,36 +82,80 @@ router.get("/api/deals/lookups", requireAuth, async (_req, res) => {
 router.get("/api/deals", requireAuth, async (req, res) => {
   const currentUserId = Number(req.auth.sub);
   const companyIdFilter = parseUserId(req.query?.companyId);
+  const searchCompanyName =
+    typeof req.query?.searchCompanyName === "string" ? req.query.searchCompanyName.trim() : "";
+  const searchInn = typeof req.query?.searchInn === "string" ? req.query.searchInn.trim() : "";
+  const managerUserId = parseUserId(req.query?.managerUserId);
+  const lifecycleStatusId = parseUserId(req.query?.lifecycleStatusId);
+  const dealStageId = parseUserId(req.query?.dealStageId);
+  const hotColdFilter = typeof req.query?.hotCold === "string" ? req.query.hotCold : "";
+  const sortMode = typeof req.query?.sort === "string" ? req.query.sort : "created_desc";
 
   try {
-    let params = [currentUserId];
-    const whereParts = ["c.manager_user_id = $1"];
+    const params = [];
+    const whereParts = [];
+    const addParam = (value) => {
+      params.push(value);
+      return `$${params.length}`;
+    };
 
     if (req.auth.role === "owner") {
-      params = [];
-      whereParts.length = 0;
+      // no scope restriction
     } else if (req.auth.role === "group_lead") {
-      whereParts.length = 0;
+      const scopeParam = addParam(currentUserId);
       whereParts.push(`
         (
-          c.manager_user_id = $1
+          c.manager_user_id = ${scopeParam}
           OR c.manager_user_id IN (
             SELECT u.id
             FROM users AS u
             JOIN roles AS r ON r.id = u.role_id
-            WHERE u.group_lead_user_id = $1
+            WHERE u.group_lead_user_id = ${scopeParam}
               AND r.name = 'manager'
           )
         )
       `);
+    } else {
+      whereParts.push(`c.manager_user_id = ${addParam(currentUserId)}`);
     }
 
     if (companyIdFilter) {
-      params.push(companyIdFilter);
-      whereParts.push(`d.company_id = $${params.length}`);
+      whereParts.push(`d.company_id = ${addParam(companyIdFilter)}`);
+    }
+
+    if (searchCompanyName) {
+      whereParts.push(`c.name ILIKE ${addParam(`%${searchCompanyName}%`)}`);
+    }
+
+    if (searchInn) {
+      whereParts.push(`c.inn ILIKE ${addParam(`%${searchInn}%`)}`);
+    }
+
+    if (managerUserId) {
+      whereParts.push(`c.manager_user_id = ${addParam(managerUserId)}`);
+    }
+
+    if (lifecycleStatusId) {
+      whereParts.push(`d.deal_lifecycle_status_id = ${addParam(lifecycleStatusId)}`);
+    }
+
+    if (dealStageId) {
+      whereParts.push(`d.deal_stage_id = ${addParam(dealStageId)}`);
+    }
+
+    if (hotColdFilter === "hot") {
+      whereParts.push(`ds.name ILIKE ${addParam("%горяч%")}`);
+    } else if (hotColdFilter === "cold") {
+      whereParts.push(`ds.name ILIKE ${addParam("%холод%")}`);
     }
 
     const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
+    const orderBySql =
+      sortMode === "company_asc"
+        ? "ORDER BY c.name ASC, d.id DESC"
+        : sortMode === "advance_desc"
+          ? "ORDER BY ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0, 2) DESC, d.id DESC"
+          : "ORDER BY d.created_at DESC, d.id DESC";
 
     const result = await pool.query(
       `
@@ -149,7 +193,7 @@ router.get("/api/deals", requireAuth, async (req, res) => {
         JOIN leasing_companies AS lc ON lc.id = d.leasing_company_id
         JOIN deal_stages AS st ON st.id = d.deal_stage_id
         ${whereSql}
-        ORDER BY d.id ASC
+        ${orderBySql}
       `,
       params
     );

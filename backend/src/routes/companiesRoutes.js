@@ -30,17 +30,22 @@ const NEGATIVE_INFO_MAX_LENGTH = 2000;
 const router = express.Router();
 router.get("/api/companies", requireAuth, async (req, res) => {
   const currentUserId = Number(req.auth.sub);
+  const searchName = typeof req.query?.searchName === "string" ? req.query.searchName.trim() : "";
+  const searchInn = typeof req.query?.searchInn === "string" ? req.query.searchInn.trim() : "";
+  const managerUserId = parseUserId(req.query?.managerUserId);
+  const sortMode = typeof req.query?.sort === "string" ? req.query.sort : "created_desc";
 
   try {
-    let params = [currentUserId];
-    let whereSql = "WHERE c.manager_user_id = $1";
+    const params = [];
+    const whereParts = [];
 
     if (req.auth.role === "owner") {
-      params = [];
-      whereSql = "";
+      // no manager scope restriction
     } else if (req.auth.role === "group_lead") {
-      whereSql = `
-        WHERE c.manager_user_id = $1
+      params.push(currentUserId);
+      whereParts.push(`
+        (
+          c.manager_user_id = $1
           OR c.manager_user_id IN (
             SELECT u.id
             FROM users AS u
@@ -48,8 +53,33 @@ router.get("/api/companies", requireAuth, async (req, res) => {
             WHERE u.group_lead_user_id = $1
               AND r.name = 'manager'
           )
-      `;
+        )
+      `);
+    } else {
+      params.push(currentUserId);
+      whereParts.push("c.manager_user_id = $1");
     }
+
+    if (searchName) {
+      params.push(`%${searchName}%`);
+      whereParts.push(`c.name ILIKE $${params.length}`);
+    }
+
+    if (searchInn) {
+      params.push(`%${searchInn}%`);
+      whereParts.push(`c.inn ILIKE $${params.length}`);
+    }
+
+    if (managerUserId) {
+      params.push(managerUserId);
+      whereParts.push(`c.manager_user_id = $${params.length}`);
+    }
+
+    const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
+    const orderBySql =
+      sortMode === "name_asc"
+        ? "ORDER BY c.name ASC, c.id ASC"
+        : "ORDER BY c.created_at DESC, c.id DESC";
 
     const result = await pool.query(
       `
@@ -62,6 +92,7 @@ router.get("/api/companies", requireAuth, async (req, res) => {
           ) AS manager_name,
           c.name,
           c.inn,
+          c.revenue_rub,
           c.contact_name,
           c.phone,
           c.email,
@@ -72,7 +103,7 @@ router.get("/api/companies", requireAuth, async (req, res) => {
         FROM companies AS c
         JOIN users AS u ON u.id = c.manager_user_id
         ${whereSql}
-        ORDER BY c.id ASC
+        ${orderBySql}
       `,
       params
     );
