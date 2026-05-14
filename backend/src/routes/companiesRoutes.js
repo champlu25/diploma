@@ -3,8 +3,12 @@
 const { pool } = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const {
+  isAccountNumberValid,
+  isBikValid,
   isEmailValid,
   isInnValid,
+  isPersonNameValid,
+  isPhoneValid,
   normalizeInn,
   normalizeOptionalDate,
   normalizeOptionalEmail,
@@ -15,6 +19,13 @@ const {
   normalizeRequiredText,
   parseUserId,
 } = require("../utils/normalize");
+
+const COMPANY_NAME_MAX_LENGTH = 255;
+const CONTACT_NAME_MAX_LENGTH = 100;
+const COMPANY_COMMENT_MAX_LENGTH = 2000;
+const ADDRESS_MAX_LENGTH = 500;
+const ACTIVITY_MAX_LENGTH = 200;
+const NEGATIVE_INFO_MAX_LENGTH = 2000;
 
 const router = express.Router();
 router.get("/api/companies", requireAuth, async (req, res) => {
@@ -233,6 +244,13 @@ router.post("/api/companies", requireAuth, async (req, res) => {
     return;
   }
 
+  if (name.length > COMPANY_NAME_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Наименование компании не должно превышать ${COMPANY_NAME_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
   if (!isInnValid(inn)) {
     res.status(400).json({
       message: "ИНН должен содержать только цифры и иметь длину 10 или 12.",
@@ -247,6 +265,55 @@ router.post("/api/companies", requireAuth, async (req, res) => {
     return;
   }
 
+  if (contactName && (!isPersonNameValid(contactName) || contactName.length > CONTACT_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Контактное лицо может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (phone && !isPhoneValid(phone)) {
+    res.status(400).json({
+      message: "Некорректный формат телефона.",
+    });
+    return;
+  }
+
+  if (comment && comment.length > COMPANY_COMMENT_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Комментарий не должен превышать ${COMPANY_COMMENT_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
+  if (legalAddress && legalAddress.length > ADDRESS_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Юридический адрес не должен превышать ${ADDRESS_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
+  if (actualAddress && actualAddress.length > ADDRESS_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Фактический адрес не должен превышать ${ADDRESS_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
+  if (activity && activity.length > ACTIVITY_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Вид деятельности не должен превышать ${ACTIVITY_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
+  if (negativeInfo && negativeInfo.length > NEGATIVE_INFO_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Поле "Выявленный негатив" не должно превышать ${NEGATIVE_INFO_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
   if (Number.isNaN(nextContactAt?.getTime?.())) {
     res.status(400).json({
       message: "Некорректная дата следующего контакта.",
@@ -257,6 +324,16 @@ router.post("/api/companies", requireAuth, async (req, res) => {
   if (Number.isNaN(directorBirthDate)) {
     res.status(400).json({
       message: "Некорректная дата рождения директора.",
+    });
+    return;
+  }
+
+  if (
+    directorBirthDate &&
+    (directorBirthDate < "1900-01-01" || directorBirthDate > new Date().toISOString().slice(0, 10))
+  ) {
+    res.status(400).json({
+      message: "Дата рождения директора не может быть в будущем.",
     });
     return;
   }
@@ -296,6 +373,27 @@ router.post("/api/companies", requireAuth, async (req, res) => {
   if (hasAnyRequisites && (!bik || !rs || !ks)) {
     res.status(400).json({
       message: "Реквизиты должны быть заполнены полностью (БИК, Р/С, К/С) или не заполнены вовсе.",
+    });
+    return;
+  }
+
+  if (bik && !isBikValid(bik)) {
+    res.status(400).json({
+      message: "БИК должен содержать ровно 9 цифр.",
+    });
+    return;
+  }
+
+  if (rs && !isAccountNumberValid(rs)) {
+    res.status(400).json({
+      message: "Расчетный счет должен содержать ровно 20 цифр.",
+    });
+    return;
+  }
+
+  if (ks && !isAccountNumberValid(ks)) {
+    res.status(400).json({
+      message: "Корреспондентский счет должен содержать ровно 20 цифр.",
     });
     return;
   }
@@ -438,6 +536,14 @@ router.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
       });
       return;
     }
+
+    if (name.length > COMPANY_NAME_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Наименование компании не должно превышать ${COMPANY_NAME_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+
     fieldsToUpdate.name = name;
   }
 
@@ -453,11 +559,25 @@ router.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "contactName")) {
-    fieldsToUpdate.contact_name = normalizeOptionalText(req.body?.contactName);
+    const contactName = normalizeOptionalText(req.body?.contactName);
+    if (contactName && (!isPersonNameValid(contactName) || contactName.length > CONTACT_NAME_MAX_LENGTH)) {
+      res.status(400).json({
+        message: "Контактное лицо может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+      });
+      return;
+    }
+    fieldsToUpdate.contact_name = contactName;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "phone")) {
-    fieldsToUpdate.phone = normalizeOptionalText(req.body?.phone);
+    const phone = normalizeOptionalText(req.body?.phone);
+    if (phone && !isPhoneValid(phone)) {
+      res.status(400).json({
+        message: "Некорректный формат телефона.",
+      });
+      return;
+    }
+    fieldsToUpdate.phone = phone;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "email")) {
@@ -472,7 +592,14 @@ router.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "comment")) {
-    fieldsToUpdate.comment = normalizeOptionalText(req.body?.comment);
+    const comment = normalizeOptionalText(req.body?.comment);
+    if (comment && comment.length > COMPANY_COMMENT_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Комментарий не должен превышать ${COMPANY_COMMENT_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+    fieldsToUpdate.comment = comment;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "nextContactAt")) {
@@ -487,11 +614,25 @@ router.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "legalAddress")) {
-    fieldsToUpdate.legal_address = normalizeOptionalText(req.body?.legalAddress);
+    const legalAddress = normalizeOptionalText(req.body?.legalAddress);
+    if (legalAddress && legalAddress.length > ADDRESS_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Юридический адрес не должен превышать ${ADDRESS_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+    fieldsToUpdate.legal_address = legalAddress;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "actualAddress")) {
-    fieldsToUpdate.actual_address = normalizeOptionalText(req.body?.actualAddress);
+    const actualAddress = normalizeOptionalText(req.body?.actualAddress);
+    if (actualAddress && actualAddress.length > ADDRESS_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Фактический адрес не должен превышать ${ADDRESS_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+    fieldsToUpdate.actual_address = actualAddress;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "directorBirthDate")) {
@@ -503,15 +644,39 @@ router.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
       return;
     }
 
+    if (
+      directorBirthDate &&
+      (directorBirthDate < "1900-01-01" || directorBirthDate > new Date().toISOString().slice(0, 10))
+    ) {
+      res.status(400).json({
+        message: "Дата рождения директора не может быть в будущем.",
+      });
+      return;
+    }
+
     fieldsToUpdate.director_birth_date = directorBirthDate;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "activity")) {
-    fieldsToUpdate.activity = normalizeOptionalText(req.body?.activity);
+    const activity = normalizeOptionalText(req.body?.activity);
+    if (activity && activity.length > ACTIVITY_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Вид деятельности не должен превышать ${ACTIVITY_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+    fieldsToUpdate.activity = activity;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "negativeInfo")) {
-    fieldsToUpdate.negative_info = normalizeOptionalText(req.body?.negativeInfo);
+    const negativeInfo = normalizeOptionalText(req.body?.negativeInfo);
+    if (negativeInfo && negativeInfo.length > NEGATIVE_INFO_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Поле "Выявленный негатив" не должно превышать ${NEGATIVE_INFO_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+    fieldsToUpdate.negative_info = negativeInfo;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "revenueRub")) {
@@ -559,6 +724,27 @@ router.patch("/api/companies/:companyId", requireAuth, async (req, res) => {
   const bik = Object.prototype.hasOwnProperty.call(req.body, "bik") ? normalizeOptionalText(req.body?.bik) : undefined;
   const rs = Object.prototype.hasOwnProperty.call(req.body, "rs") ? normalizeOptionalText(req.body?.rs) : undefined;
   const ks = Object.prototype.hasOwnProperty.call(req.body, "ks") ? normalizeOptionalText(req.body?.ks) : undefined;
+
+  if (typeof bik !== "undefined" && bik && !isBikValid(bik)) {
+    res.status(400).json({
+      message: "БИК должен содержать ровно 9 цифр.",
+    });
+    return;
+  }
+
+  if (typeof rs !== "undefined" && rs && !isAccountNumberValid(rs)) {
+    res.status(400).json({
+      message: "Расчетный счет должен содержать ровно 20 цифр.",
+    });
+    return;
+  }
+
+  if (typeof ks !== "undefined" && ks && !isAccountNumberValid(ks)) {
+    res.status(400).json({
+      message: "Корреспондентский счет должен содержать ровно 20 цифр.",
+    });
+    return;
+  }
 
   if (typeof bik !== "undefined") fieldsToUpdate.bik = bik;
   if (typeof rs !== "undefined") fieldsToUpdate.rs = rs;

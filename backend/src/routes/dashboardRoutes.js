@@ -49,7 +49,7 @@ router.put("/api/dashboards/chart-view-settings/:chartKey", requireAuth, async (
   const chartKey = typeof req.params?.chartKey === "string" ? req.params.chartKey.trim() : "";
   const chartTypeId = parseUserId(req.body?.chartTypeId);
 
-  if (!chartKey || !/^[a-z0-9_]+$/.test(chartKey) || chartKey.length > 80) {
+  if (!chartKey || !/^[a-z0-9_]+$/.test(chartKey) || chartKey.length > 50) {
     res.status(400).json({
       message: "Некорректный chartKey.",
     });

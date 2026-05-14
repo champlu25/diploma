@@ -3,7 +3,9 @@
 const { pool } = require("../db");
 const { hashPassword, validatePassword, verifyPassword } = require("../security");
 const { authCookieName, getEmptyAuthCookieOptions, issueAuthCookie, requireAuth } = require("../middleware/auth");
-const { normalizeOptionalText, normalizeUsername } = require("../utils/normalize");
+const { isPersonNameValid, normalizeOptionalText, normalizeUsername } = require("../utils/normalize");
+
+const PERSON_NAME_MAX_LENGTH = 100;
 
 const router = express.Router();
 router.get("/api/health", (_req, res) => {
@@ -68,6 +70,27 @@ router.patch("/api/auth/me", requireAuth, async (req, res) => {
   const lastName = normalizeOptionalText(req.body?.lastName);
   const firstName = normalizeOptionalText(req.body?.firstName);
   const middleName = normalizeOptionalText(req.body?.middleName);
+
+  if (lastName && (!isPersonNameValid(lastName) || lastName.length > PERSON_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Фамилия может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (firstName && (!isPersonNameValid(firstName) || firstName.length > PERSON_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Имя может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (middleName && (!isPersonNameValid(middleName) || middleName.length > PERSON_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Отчество может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
 
   try {
     const updatedResult = await pool.query(

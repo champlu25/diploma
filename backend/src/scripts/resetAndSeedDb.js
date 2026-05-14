@@ -351,15 +351,9 @@ const seedTestData = async (client) => {
     return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   };
 
-  const companyCount = 24;
-  for (let i = 0; i < companyCount; i += 1) {
-    const managerUserId = managers[i % managers.length].id;
-    const baseName = companyNamePool[i % companyNamePool.length];
-    const suffix = i < companyNamePool.length ? "" : ` ${i + 1}`;
-    const name = `${baseName}${suffix}`;
-
-    // 10-digit INN, unique, matches schema regex.
-    const inn = String(7700000000 + i).padStart(10, "0");
+  let companyIndex = 0;
+  const pushCompany = (managerUserId, name, options = {}) => {
+    const inn = String(7700000000 + companyIndex).padStart(10, "0");
 
     const firstName = pick(rng, contactFirstNames);
     const lastName = pick(rng, contactLastNames);
@@ -375,21 +369,48 @@ const seedTestData = async (client) => {
       name,
       inn,
       contactName: `${firstName} ${lastName}`,
-      phone: `+7999000${String(1000 + i).slice(-4)}`,
+      phone: `+7999000${String(1000 + companyIndex).slice(-4)}`,
       email: `c${inn}@example.test`,
-      comment: i % 3 === 0 ? "Тестовые данные" : null,
+      comment: companyIndex % 3 === 0 ? "Тестовые данные" : null,
       legalAddress: `г. ${cityLegal}, ул. ${streetLegal}, ${buildingLegal}`,
       actualAddress: `г. ${cityActual}, ул. ${streetActual}, ${buildingActual}`,
-      directorBirthDate: rng() < 0.8 ? randomDateOnly(1965, 1995) : null,
-      activity: rng() < 0.9 ? pick(rng, activityPool) : null,
-      revenueRub: rng() < 0.8 ? randomInt(rng, 5_000_000, 900_000_000) : null,
-      negativeInfo: pick(rng, negativePool),
+      directorBirthDate:
+        typeof options.directorBirthDate !== "undefined"
+          ? options.directorBirthDate
+          : rng() < 0.8
+            ? randomDateOnly(1965, 1995)
+            : null,
+      activity:
+        typeof options.activity !== "undefined" ? options.activity : rng() < 0.9 ? pick(rng, activityPool) : null,
+      revenueRub:
+        typeof options.revenueRub !== "undefined"
+          ? options.revenueRub
+          : rng() < 0.8
+            ? randomInt(rng, 5_000_000, 900_000_000)
+            : null,
+      negativeInfo:
+        typeof options.negativeInfo !== "undefined" ? options.negativeInfo : pick(rng, negativePool),
       bik: "044525225",
-      rs: `4070281040001000${String(9000 + i).padStart(4, "0")}`,
+      rs: `4070281040001000${String(9000 + companyIndex).padStart(4, "0")}`,
       ks: "30101810400000000225",
       taxSystemId: pick(rng, taxSystemIds),
-      preferredCommunicationChannelId: rng() < 0.85 ? pick(rng, communicationChannelIds) : null,
+      preferredCommunicationChannelId:
+        rng() < 0.85 ? pick(rng, communicationChannelIds) : null,
     });
+
+    companyIndex += 1;
+  };
+
+  pushCompany(owner.id, 'ООО "Собственник"');
+  pushCompany(groupLead1.id, 'ООО "ЛидГрупп 1"');
+  pushCompany(groupLead2.id, 'ООО "ЛидГрупп 2"');
+
+  const companyCount = 24;
+  for (let i = 0; i < companyCount; i += 1) {
+    const managerUserId = managers[i % managers.length].id;
+    const baseName = companyNamePool[i % companyNamePool.length];
+    const suffix = i < companyNamePool.length ? "" : ` ${i + 1}`;
+    pushCompany(managerUserId, `${baseName}${suffix}`);
   }
 
   const createdCompanies = [];
@@ -471,30 +492,12 @@ const seedTestData = async (client) => {
   ];
 
   // More deals for charts: a good spread across lifecycle/status/stages/leasing.
-  const dealCount = 140;
-  for (let i = 0; i < dealCount; i += 1) {
-    const company = pick(rng, createdCompanies);
-
-    const lifecycleRoll = rng();
-    const lifecycleId =
-      lifecycleRoll < 0.5
-        ? activeLifecycleId
-        : lifecycleRoll < 0.7
-          ? realizedLifecycleId
-          : lifecycleRoll < 0.85
-            ? delayedLifecycleId
-            : failedLifecycleId;
-
-    const dealStatusId = rng() < 0.6 ? hotStatusId : coldStatusId;
-    const leasingCompanyId = pick(rng, leasingCompanyIds);
-    const stageId = pick(rng, stageIds);
-
-    const plCostRub = randomInt(rng, 500_000, 15_000_000);
+  const seedDeal = async (company, lifecycleId, dealStatusId, leasingCompanyId, stageId, comment) => {
+    const basePlCostRub = randomInt(rng, 500_000, 15_000_000);
+    const plCostRub = rng() < 0.2 ? Number((basePlCostRub + rng()).toFixed(2)) : basePlCostRub;
     const agentFeePercent = randomInt(rng, 5, 25);
-
     const createdDaysAgo = randomInt(rng, 0, 180);
     const updatedDaysAgo = Math.max(0, createdDaysAgo - randomInt(rng, 0, 14));
-
     const completedAtSql =
       lifecycleId === activeLifecycleId ? "NULL" : randomDaysAgoSql(randomInt(rng, 0, 120));
 
@@ -538,8 +541,62 @@ const seedTestData = async (client) => {
         leasingCompanyId,
         agentFeePercent,
         stageId,
-        rng() < 0.75 ? pick(rng, commentPool) : null,
+        comment,
       ],
+    );
+  };
+
+  const featuredCompanies = createdCompanies.slice(0, 3);
+  await seedDeal(
+    featuredCompanies[0],
+    activeLifecycleId,
+    hotStatusId,
+    pick(rng, leasingCompanyIds),
+    pick(rng, stageIds),
+    "Сделка владельца",
+  );
+  await seedDeal(
+    featuredCompanies[1],
+    realizedLifecycleId,
+    coldStatusId,
+    pick(rng, leasingCompanyIds),
+    pick(rng, stageIds),
+    "Сделка руководителя группы 1",
+  );
+  await seedDeal(
+    featuredCompanies[2],
+    delayedLifecycleId,
+    hotStatusId,
+    pick(rng, leasingCompanyIds),
+    pick(rng, stageIds),
+    "Сделка руководителя группы 2",
+  );
+
+  const dealCount = 137;
+  for (let i = 0; i < dealCount; i += 1) {
+    const company = pick(rng, createdCompanies);
+
+    const lifecycleRoll = rng();
+    const lifecycleId =
+      lifecycleRoll < 0.5
+        ? activeLifecycleId
+        : lifecycleRoll < 0.7
+          ? realizedLifecycleId
+          : lifecycleRoll < 0.85
+            ? delayedLifecycleId
+            : failedLifecycleId;
+
+    const dealStatusId = rng() < 0.6 ? hotStatusId : coldStatusId;
+    const leasingCompanyId = pick(rng, leasingCompanyIds);
+    const stageId = pick(rng, stageIds);
+
+    await seedDeal(
+      company,
+      lifecycleId,
+      dealStatusId,
+      leasingCompanyId,
+      stageId,
+      rng() < 0.75 ? pick(rng, commentPool) : null,
     );
   }
 

@@ -4,7 +4,11 @@ const { pool } = require("../db");
 const { hashPassword } = require("../security");
 const { requireOwner } = require("../middleware/auth");
 const { generateTempPassword } = require("../utils/passwords");
-const { normalizeOptionalText, normalizeRole, normalizeUsername, parseUserId } = require("../utils/normalize");
+const { isPersonNameValid, isUsernameValid, normalizeOptionalText, normalizeRole, normalizeUsername, parseUserId } = require("../utils/normalize");
+
+const LEASING_COMPANY_NAME_MAX_LENGTH = 100;
+const COMMUNICATION_CHANNEL_NAME_MAX_LENGTH = 50;
+const PERSON_NAME_MAX_LENGTH = 100;
 
 const router = express.Router();
 router.patch(
@@ -165,6 +169,34 @@ router.post("/api/owner/users", requireOwner, async (req, res) => {
   if (!username || !roleName) {
     res.status(400).json({
       message: "Поля username и role обязательны.",
+    });
+    return;
+  }
+
+  if (!isUsernameValid(username)) {
+    res.status(400).json({
+      message: "Username должен содержать от 3 до 50 символов и состоять только из строчных латинских букв, цифр, точек, дефисов и символа подчеркивания.",
+    });
+    return;
+  }
+
+  if (lastName && (!isPersonNameValid(lastName) || lastName.length > PERSON_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Фамилия может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (firstName && (!isPersonNameValid(firstName) || firstName.length > PERSON_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Имя может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (middleName && (!isPersonNameValid(middleName) || middleName.length > PERSON_NAME_MAX_LENGTH)) {
+    res.status(400).json({
+      message: "Отчество может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
     });
     return;
   }
@@ -430,9 +462,9 @@ router.post("/api/owner/leasing-companies", requireOwner, async (req, res) => {
     return;
   }
 
-  if (name.length > 160) {
+  if (name.length > LEASING_COMPANY_NAME_MAX_LENGTH) {
     res.status(400).json({
-      message: "Название слишком длинное.",
+      message: `Название не должно превышать ${LEASING_COMPANY_NAME_MAX_LENGTH} символов.`,
     });
     return;
   }
@@ -509,9 +541,9 @@ router.patch("/api/owner/leasing-companies/:leasingCompanyId", requireOwner, asy
       return;
     }
 
-    if (trimmed.length > 160) {
+    if (trimmed.length > LEASING_COMPANY_NAME_MAX_LENGTH) {
       res.status(400).json({
-        message: "Название слишком длинное.",
+        message: `Название не должно превышать ${LEASING_COMPANY_NAME_MAX_LENGTH} символов.`,
       });
       return;
     }
@@ -658,9 +690,9 @@ router.post("/api/owner/communication-channels", requireOwner, async (req, res) 
     return;
   }
 
-  if (name.length > 160) {
+  if (name.length > COMMUNICATION_CHANNEL_NAME_MAX_LENGTH) {
     res.status(400).json({
-      message: "Название слишком длинное.",
+      message: `Название не должно превышать ${COMMUNICATION_CHANNEL_NAME_MAX_LENGTH} символов.`,
     });
     return;
   }
@@ -736,9 +768,9 @@ router.patch("/api/owner/communication-channels/:channelId", requireOwner, async
       return;
     }
 
-    if (trimmed.length > 160) {
+    if (trimmed.length > COMMUNICATION_CHANNEL_NAME_MAX_LENGTH) {
       res.status(400).json({
-        message: "Название слишком длинное.",
+        message: `Название не должно превышать ${COMMUNICATION_CHANNEL_NAME_MAX_LENGTH} символов.`,
       });
       return;
     }

@@ -88,7 +88,7 @@ const openApiSpec = {
           dealStatusId: { type: "integer" },
           leasingCompanyId: { type: "integer" },
           dealStageId: { type: "integer" },
-          plCostRub: { type: "integer", minimum: 0 },
+          plCostRub: { type: "number", minimum: 0 },
           agentFeePercent: { type: "number", minimum: 0, maximum: 100 },
           comment: { type: "string", nullable: true },
         },
@@ -265,6 +265,7 @@ const openApiSpec = {
           schema: {
             type: "string",
             pattern: "^[a-z0-9_]+$",
+            maxLength: 50,
           },
         },
       ],

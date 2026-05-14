@@ -40,6 +40,12 @@ const toFiniteNumberOrZero = (value: unknown): number => {
 
 const formatNumberLike = (value: number): string => value.toLocaleString("ru-RU");
 
+const formatMoneyLike = (value: number): string =>
+  value.toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 const formatPeriodDate = (value: string): string => {
   if (!value) return "";
   const date = new Date(`${value}T00:00:00`);
@@ -505,7 +511,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
             <Spinner size={22} />
           ) : (
             <div className={styles.metricValue}>
-              {formatNumberLike(Math.round(potentialIncomeRub))} ₽
+              {formatMoneyLike(potentialIncomeRub)} ₽
             </div>
           )}
         </Card>
@@ -527,7 +533,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           {isLoading ? (
             <Spinner size={22} />
           ) : (
-            <div className={styles.metricValue}>{formatNumberLike(Math.round(earnedRub))} ₽</div>
+              <div className={styles.metricValue}>{formatMoneyLike(earnedRub)} ₽</div>
           )}
         </Card>
         <Card
@@ -538,9 +544,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           {isLoading ? (
             <Spinner size={22} />
           ) : (
-            <div className={styles.metricValue}>
-              {formatNumberLike(Math.round(missedIncomeRub))} ₽
-            </div>
+              <div className={styles.metricValue}>{formatMoneyLike(missedIncomeRub)} ₽</div>
           )}
         </Card>
         <Card
@@ -551,9 +555,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           {isLoading ? (
             <Spinner size={22} />
           ) : (
-            <div className={styles.metricValue}>
-              {formatNumberLike(Math.round(delayedIncomeRub))} ₽
-            </div>
+              <div className={styles.metricValue}>{formatMoneyLike(delayedIncomeRub)} ₽</div>
           )}
         </Card>
       </div>
@@ -642,7 +644,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                             <div className={styles.barMeta}>
                               <span className={styles.barLabel}>{item.label}</span>
                               <span className={styles.barValue}>
-                                {formatNumberLike(Math.round(item.value))} ₽
+                                {formatMoneyLike(item.value)} ₽
                               </span>
                             </div>
                             <div className={styles.barTrack}>
@@ -666,7 +668,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                         label: item.label,
                         value: item.value,
                         color: item.color,
-                        title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽`,
+                        title: `${item.label}: ${formatMoneyLike(item.value)} ₽`,
                       }))}
                     />
                   )}
@@ -704,7 +706,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                         <div className={styles.barMeta}>
                           <span className={styles.barLabel}>{item.label}</span>
                           <span className={styles.barValue}>
-                            {formatNumberLike(Math.round(item.value))} ₽ ·{" "}
+                            {formatMoneyLike(item.value)} ₽ ·{" "}
                             {formatNumberLike(item.count)}
                           </span>
                         </div>
@@ -729,7 +731,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                     label: item.label,
                     value: item.value,
                     color: item.color,
-                    title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽ · ${formatNumberLike(item.count)}`,
+                    title: `${item.label}: ${formatMoneyLike(item.value)} ₽ · ${formatNumberLike(item.count)}`,
                   }))}
                 />
               )}
@@ -765,7 +767,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                         <div className={styles.barMeta}>
                           <span className={styles.barLabel}>{item.label}</span>
                           <span className={styles.barValue}>
-                            {formatNumberLike(Math.round(item.value))} ₽ ·{" "}
+                            {formatMoneyLike(item.value)} ₽ ·{" "}
                             {formatNumberLike(item.count)}
                           </span>
                         </div>
@@ -790,7 +792,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
                     label: item.label,
                     value: item.value,
                     color: item.color,
-                    title: `${item.label}: ${formatNumberLike(Math.round(item.value))} ₽ · ${formatNumberLike(item.count)}`,
+                    title: `${item.label}: ${formatMoneyLike(item.value)} ₽ · ${formatNumberLike(item.count)}`,
                   }))}
                 />
               )}

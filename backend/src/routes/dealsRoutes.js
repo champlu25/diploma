@@ -6,11 +6,15 @@ const {
   normalizeOptionalDate,
   normalizeOptionalId,
   normalizeOptionalText,
+  normalizeRequiredNonNegativeDecimal,
   normalizeRequiredNonNegativeInteger,
   normalizeRequiredPercent,
   normalizeRequiredText,
   parseUserId,
 } = require("../utils/normalize");
+
+const DEAL_NEED_MAX_LENGTH = 500;
+const DEAL_COMMENT_MAX_LENGTH = 2000;
 
 const router = express.Router();
 router.get("/api/deals/lookups", requireAuth, async (_req, res) => {
@@ -131,7 +135,7 @@ router.get("/api/deals", requireAuth, async (req, res) => {
           d.leasing_company_id,
           lc.name AS leasing_company_name,
           d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
-          ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
+          ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0, 2) AS advance_total_rub,
           d.deal_stage_id,
           st.name AS deal_stage_name,
           d.comment,
@@ -177,12 +181,26 @@ router.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => 
   const dealStatusId = parseUserId(req.body?.dealStatusId);
   const leasingCompanyId = parseUserId(req.body?.leasingCompanyId);
   const dealStageId = parseUserId(req.body?.dealStageId);
-  const plCostRub = normalizeRequiredNonNegativeInteger(req.body?.plCostRub);
+  const plCostRub = normalizeRequiredNonNegativeDecimal(req.body?.plCostRub);
   const agentFeePercent = normalizeRequiredPercent(req.body?.agentFeePercent);
 
   if (!need) {
     res.status(400).json({
       message: 'Поле "Потребность" обязательно.',
+    });
+    return;
+  }
+
+  if (need.length > DEAL_NEED_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Поле "Потребность" не должно превышать ${DEAL_NEED_MAX_LENGTH} символов.`,
+    });
+    return;
+  }
+
+  if (comment && comment.length > DEAL_COMMENT_MAX_LENGTH) {
+    res.status(400).json({
+      message: `Комментарий не должен превышать ${DEAL_COMMENT_MAX_LENGTH} символов.`,
     });
     return;
   }
@@ -244,7 +262,7 @@ router.post("/api/companies/:companyId/deals", requireAuth, async (req, res) => 
         d.leasing_company_id,
         lc.name AS leasing_company_name,
         d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
-        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
+        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0, 2) AS advance_total_rub,
         d.deal_stage_id,
         st.name AS deal_stage_name,
         d.comment,
@@ -386,6 +404,12 @@ router.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
       });
       return;
     }
+    if (need.length > DEAL_NEED_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Поле "Потребность" не должно превышать ${DEAL_NEED_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
     fieldsToUpdate.need = need;
   }
 
@@ -401,7 +425,7 @@ router.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "plCostRub")) {
-    const plCostRub = normalizeRequiredNonNegativeInteger(req.body?.plCostRub);
+    const plCostRub = normalizeRequiredNonNegativeDecimal(req.body?.plCostRub);
     if (plCostRub === null) {
       res.status(400).json({
         message: "Некорректная стоимость ПЛ.",
@@ -445,7 +469,14 @@ router.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body, "comment")) {
-    fieldsToUpdate.comment = normalizeOptionalText(req.body?.comment);
+    const comment = normalizeOptionalText(req.body?.comment);
+    if (comment && comment.length > DEAL_COMMENT_MAX_LENGTH) {
+      res.status(400).json({
+        message: `Комментарий не должен превышать ${DEAL_COMMENT_MAX_LENGTH} символов.`,
+      });
+      return;
+    }
+    fieldsToUpdate.comment = comment;
   }
 
   const updateKeys = Object.keys(fieldsToUpdate);
@@ -478,7 +509,7 @@ router.patch("/api/deals/:dealId", requireAuth, async (req, res) => {
         d.leasing_company_id,
         lc.name AS leasing_company_name,
         d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
-        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
+        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0, 2) AS advance_total_rub,
         d.deal_stage_id,
         st.name AS deal_stage_name,
         d.comment,
@@ -628,7 +659,7 @@ router.patch("/api/deals/:dealId/lifecycle-status", requireAuth, async (req, res
         d.leasing_company_id,
         lc.name AS leasing_company_name,
         d.agent_fee_percent::DOUBLE PRECISION AS agent_fee_percent,
-        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0)::BIGINT AS advance_total_rub,
+        ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0, 2) AS advance_total_rub,
         d.deal_stage_id,
         st.name AS deal_stage_name,
         d.comment,

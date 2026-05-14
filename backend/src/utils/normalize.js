@@ -62,6 +62,25 @@ const normalizeRequiredNonNegativeInteger = (value) => {
   return null;
 };
 
+const normalizeRequiredNonNegativeDecimal = (value) => {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+      ? Number(value.trim())
+      : NaN;
+
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  if (parsed < 0) {
+    return null;
+  }
+
+  return parsed;
+};
+
 const normalizeRequiredPercent = (value) => {
   const parsed =
     typeof value === "number"
@@ -167,18 +186,34 @@ const normalizeOptionalId = (value) => {
   return parseUserId(value);
 };
 
+const isUsernameValid = (username) => /^[a-z0-9._-]{3,50}$/.test(username);
+
+const isPersonNameValid = (value) => /^[A-Za-zА-Яа-яЁё -]{1,100}$/.test(value);
+
 const isInnValid = (inn) => /^\d{10}(\d{2})?$/.test(inn);
 
 const isEmailValid = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const isPhoneValid = (phone) => /^\+?[0-9][0-9\s\-\(\)]{5,19}$/.test(phone);
+
+const isBikValid = (bik) => /^\d{9}$/.test(bik);
+
+const isAccountNumberValid = (value) => /^\d{20}$/.test(value);
 module.exports = {
+  isAccountNumberValid,
+  isBikValid,
   isEmailValid,
   isInnValid,
+  isPersonNameValid,
+  isPhoneValid,
+  isUsernameValid,
   normalizeInn,
   normalizeOptionalDate,
   normalizeOptionalEmail,
   normalizeOptionalId,
   normalizeOptionalText,
   normalizeOptionalTimestamp,
+  normalizeRequiredNonNegativeDecimal,
   normalizeRequiredNonNegativeInteger,
   normalizeRequiredPercent,
   normalizeRequiredText,
