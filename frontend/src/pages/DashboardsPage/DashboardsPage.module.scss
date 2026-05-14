@@ -71,10 +71,22 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
+  align-items: stretch;
 }
 
 .chartCard {
+  display: flex;
+  flex-direction: column;
   width: 100%;
+}
+
+.chartBody {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
 }
 
 .loading {

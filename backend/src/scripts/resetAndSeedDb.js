@@ -192,15 +192,20 @@ const seedTestData = async (client) => {
   }
 
   const credentials = {
-    owner: { username: "owner", password: "Password123" },
+    owner: { username: "ivan_ivanov", password: "Password123" },
     groupLeads: [
-      { username: "lead1", password: "Password123" },
-      { username: "lead2", password: "Password123" },
+      { username: "kirill_petrov", password: "Password123" },
+      { username: "elena_morozova", password: "Password123" },
     ],
-    managers: Array.from({ length: 7 }, (_item, index) => ({
-      username: `manager${index + 1}`,
-      password: "Password123",
-    })),
+    managers: [
+      { username: "sergey_sidorov", password: "Password123" },
+      { username: "anna_kuznetsova", password: "Password123" },
+      { username: "alexey_smirnov", password: "Password123" },
+      { username: "maria_vasileva", password: "Password123" },
+      { username: "dmitry_popov", password: "Password123" },
+      { username: "olga_novikova", password: "Password123" },
+      { username: "nikita_fyodorov", password: "Password123" },
+    ],
   };
 
   const owner = await insertUser(client, {
@@ -215,8 +220,8 @@ const seedTestData = async (client) => {
     ...credentials.groupLeads[0],
     roleId: groupLeadRoleId,
     lastName: "Петров",
-    firstName: "Пётр",
-    middleName: "Петрович",
+    firstName: "Кирилл",
+    middleName: "Андреевич",
   });
 
   const groupLead2 = await insertUser(client, {

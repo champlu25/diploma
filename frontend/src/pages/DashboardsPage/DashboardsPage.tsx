@@ -40,8 +40,10 @@ const toFiniteNumberOrZero = (value: unknown): number => {
 
 const formatNumberLike = (value: number): string => value.toLocaleString("ru-RU");
 
+const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
+
 const formatMoneyLike = (value: number): string =>
-  value.toLocaleString("ru-RU", {
+  roundToTwo(value).toLocaleString("ru-RU", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -334,19 +336,31 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
   );
 
   const potentialIncomeRub = useMemo(
-    () => activeDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+    () =>
+      roundToTwo(
+        activeDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+      ),
     [activeDeals],
   );
   const earnedRub = useMemo(
-    () => realizedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+    () =>
+      roundToTwo(
+        realizedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+      ),
     [realizedDeals],
   );
   const delayedIncomeRub = useMemo(
-    () => delayedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+    () =>
+      roundToTwo(
+        delayedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+      ),
     [delayedDeals],
   );
   const missedIncomeRub = useMemo(
-    () => failedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+    () =>
+      roundToTwo(
+        failedDeals.reduce((acc, deal) => acc + toFiniteNumberOrZero(deal.advanceTotalRub), 0),
+      ),
     [failedDeals],
   );
   const hotDealsCount = useMemo(
@@ -387,7 +401,9 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
         continue;
       sums.set(
         deal.managerName,
-        (sums.get(deal.managerName) ?? 0) + toFiniteNumberOrZero(deal.advanceTotalRub),
+        roundToTwo(
+          (sums.get(deal.managerName) ?? 0) + toFiniteNumberOrZero(deal.advanceTotalRub),
+        ),
       );
     }
     return Array.from(sums.entries())
@@ -409,7 +425,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       const current = aggregates.get(key) ?? { count: 0, sum: 0 };
       aggregates.set(key, {
         count: current.count + 1,
-        sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub),
+        sum: roundToTwo(current.sum + toFiniteNumberOrZero(deal.advanceTotalRub)),
       });
     }
     return Array.from(aggregates.entries())
@@ -434,7 +450,7 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
       const current = aggregates.get(key) ?? { count: 0, sum: 0 };
       aggregates.set(key, {
         count: current.count + 1,
-        sum: current.sum + toFiniteNumberOrZero(deal.advanceTotalRub),
+        sum: roundToTwo(current.sum + toFiniteNumberOrZero(deal.advanceTotalRub)),
       });
     }
     return Array.from(aggregates.entries())
@@ -569,58 +585,60 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
               className={styles.chartCard}
               actions={renderChartActions(DASHBOARD_CHART_KEYS.managerCount, false, true, false)}
             >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <>
-                  {getChartView(DASHBOARD_CHART_KEYS.managerCount) !== chartTypeIds.verticalId &&
-                    getChartView(DASHBOARD_CHART_KEYS.managerCount) !== chartTypeIds.pieId && (
-                      <div className={styles.barList}>
-                        {managerCountSegments.map((item) => (
-                          <div key={item.label} className={styles.barRow}>
-                            <div className={styles.barMeta}>
-                              <span className={styles.barLabel}>{item.label}</span>
-                              <span className={styles.barValue}>
-                                {formatNumberLike(item.value)}
-                              </span>
+              <div className={styles.chartBody}>
+                {isLoading ? (
+                  <div className={styles.loading}>
+                    <Spinner size={24} />
+                    <div className={styles.loadingText}>Загрузка...</div>
+                  </div>
+                ) : (
+                  <>
+                    {getChartView(DASHBOARD_CHART_KEYS.managerCount) !== chartTypeIds.verticalId &&
+                      getChartView(DASHBOARD_CHART_KEYS.managerCount) !== chartTypeIds.pieId && (
+                        <div className={styles.barList}>
+                          {managerCountSegments.map((item) => (
+                            <div key={item.label} className={styles.barRow}>
+                              <div className={styles.barMeta}>
+                                <span className={styles.barLabel}>{item.label}</span>
+                                <span className={styles.barValue}>
+                                  {formatNumberLike(item.value)}
+                                </span>
+                              </div>
+                              <div className={styles.barTrack}>
+                                <div
+                                  className={styles.barFill}
+                                  style={{
+                                    ["--color" as never]: item.color,
+                                    ["--size" as never]: `${managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0}%`,
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <div className={styles.barTrack}>
-                              <div
-                                className={styles.barFill}
-                                style={{
-                                  ["--color" as never]: item.color,
-                                  ["--size" as never]: `${managerCountMax > 0 ? Math.round((item.value / managerCountMax) * 100) : 0}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
+                    {getChartView(DASHBOARD_CHART_KEYS.managerCount) === chartTypeIds.verticalId && (
+                      <VerticalBarChart
+                        ariaLabel="Сделки по менеджерам"
+                        emptyText="Сделок пока нет"
+                        bars={managerCountSegments.map((item) => ({
+                          label: item.label,
+                          value: item.value,
+                          color: item.color,
+                          title: `${item.label}: ${formatNumberLike(item.value)}`,
+                        }))}
+                      />
                     )}
-                  {getChartView(DASHBOARD_CHART_KEYS.managerCount) === chartTypeIds.verticalId && (
-                    <VerticalBarChart
-                      ariaLabel="Сделки по менеджерам"
-                      emptyText="Сделок пока нет"
-                      bars={managerCountSegments.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                        color: item.color,
-                        title: `${item.label}: ${formatNumberLike(item.value)}`,
-                      }))}
-                    />
-                  )}
-                  {getChartView(DASHBOARD_CHART_KEYS.managerCount) === chartTypeIds.pieId && (
-                    <PieChart
-                      ariaLabel="Сделки по менеджерам"
-                      emptyText="Сделок пока нет"
-                      segments={managerCountSegments}
-                    />
-                  )}
-                </>
-              )}
+                    {getChartView(DASHBOARD_CHART_KEYS.managerCount) === chartTypeIds.pieId && (
+                      <PieChart
+                        ariaLabel="Сделки по менеджерам"
+                        emptyText="Сделок пока нет"
+                        segments={managerCountSegments}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
             </Card>
 
             <Card
@@ -629,58 +647,60 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
               className={styles.chartCard}
               actions={renderChartActions(DASHBOARD_CHART_KEYS.managerIncome, false, true, false)}
             >
-              {isLoading ? (
-                <div className={styles.loading}>
-                  <Spinner size={24} />
-                  <div className={styles.loadingText}>Загрузка...</div>
-                </div>
-              ) : (
-                <>
-                  {getChartView(DASHBOARD_CHART_KEYS.managerIncome) !== chartTypeIds.verticalId &&
-                    getChartView(DASHBOARD_CHART_KEYS.managerIncome) !== chartTypeIds.pieId && (
-                      <div className={styles.barList}>
-                        {managerIncomeSegments.map((item) => (
-                          <div key={item.label} className={styles.barRow}>
-                            <div className={styles.barMeta}>
-                              <span className={styles.barLabel}>{item.label}</span>
-                              <span className={styles.barValue}>
-                                {formatMoneyLike(item.value)} ₽
-                              </span>
+              <div className={styles.chartBody}>
+                {isLoading ? (
+                  <div className={styles.loading}>
+                    <Spinner size={24} />
+                    <div className={styles.loadingText}>Загрузка...</div>
+                  </div>
+                ) : (
+                  <>
+                    {getChartView(DASHBOARD_CHART_KEYS.managerIncome) !== chartTypeIds.verticalId &&
+                      getChartView(DASHBOARD_CHART_KEYS.managerIncome) !== chartTypeIds.pieId && (
+                        <div className={styles.barList}>
+                          {managerIncomeSegments.map((item) => (
+                            <div key={item.label} className={styles.barRow}>
+                              <div className={styles.barMeta}>
+                                <span className={styles.barLabel}>{item.label}</span>
+                                <span className={styles.barValue}>
+                                  {formatMoneyLike(item.value)} ₽
+                                </span>
+                              </div>
+                              <div className={styles.barTrack}>
+                                <div
+                                  className={styles.barFill}
+                                  style={{
+                                    ["--color" as never]: item.color,
+                                    ["--size" as never]: `${managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0}%`,
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <div className={styles.barTrack}>
-                              <div
-                                className={styles.barFill}
-                                style={{
-                                  ["--color" as never]: item.color,
-                                  ["--size" as never]: `${managerIncomeMax > 0 ? Math.round((item.value / managerIncomeMax) * 100) : 0}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
+                    {getChartView(DASHBOARD_CHART_KEYS.managerIncome) === chartTypeIds.verticalId && (
+                      <VerticalBarChart
+                        ariaLabel="Доход по менеджерам"
+                        emptyText="Сделок пока нет"
+                        bars={managerIncomeSegments.map((item) => ({
+                          label: item.label,
+                          value: item.value,
+                          color: item.color,
+                          title: `${item.label}: ${formatMoneyLike(item.value)} ₽`,
+                        }))}
+                      />
                     )}
-                  {getChartView(DASHBOARD_CHART_KEYS.managerIncome) === chartTypeIds.verticalId && (
-                    <VerticalBarChart
-                      ariaLabel="Доход по менеджерам"
-                      emptyText="Сделок пока нет"
-                      bars={managerIncomeSegments.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                        color: item.color,
-                        title: `${item.label}: ${formatMoneyLike(item.value)} ₽`,
-                      }))}
-                    />
-                  )}
-                  {getChartView(DASHBOARD_CHART_KEYS.managerIncome) === chartTypeIds.pieId && (
-                    <PieChart
-                      ariaLabel="Доход по менеджерам"
-                      emptyText="Сделок пока нет"
-                      segments={managerIncomeSegments}
-                    />
-                  )}
-                </>
-              )}
+                    {getChartView(DASHBOARD_CHART_KEYS.managerIncome) === chartTypeIds.pieId && (
+                      <PieChart
+                        ariaLabel="Доход по менеджерам"
+                        emptyText="Сделок пока нет"
+                        segments={managerIncomeSegments}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
             </Card>
           </>
         )}
@@ -691,59 +711,61 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           className={styles.chartCard}
           actions={renderChartActions(DASHBOARD_CHART_KEYS.leasingAv)}
         >
-          {isLoading ? (
-            <div className={styles.loading}>
-              <Spinner size={24} />
-              <div className={styles.loadingText}>Загрузка...</div>
-            </div>
-          ) : (
-            <>
-              {getChartView(DASHBOARD_CHART_KEYS.leasingAv) !== chartTypeIds.verticalId &&
-                getChartView(DASHBOARD_CHART_KEYS.leasingAv) !== chartTypeIds.pieId && (
-                  <div className={styles.barList}>
-                    {leasingSegments.map((item) => (
-                      <div key={item.label} className={styles.barRow}>
-                        <div className={styles.barMeta}>
-                          <span className={styles.barLabel}>{item.label}</span>
-                          <span className={styles.barValue}>
-                            {formatMoneyLike(item.value)} ₽ ·{" "}
-                            {formatNumberLike(item.count)}
-                          </span>
+          <div className={styles.chartBody}>
+            {isLoading ? (
+              <div className={styles.loading}>
+                <Spinner size={24} />
+                <div className={styles.loadingText}>Загрузка...</div>
+              </div>
+            ) : (
+              <>
+                {getChartView(DASHBOARD_CHART_KEYS.leasingAv) !== chartTypeIds.verticalId &&
+                  getChartView(DASHBOARD_CHART_KEYS.leasingAv) !== chartTypeIds.pieId && (
+                    <div className={styles.barList}>
+                      {leasingSegments.map((item) => (
+                        <div key={item.label} className={styles.barRow}>
+                          <div className={styles.barMeta}>
+                            <span className={styles.barLabel}>{item.label}</span>
+                            <span className={styles.barValue}>
+                              {formatMoneyLike(item.value)} ₽ ·{" "}
+                              {formatNumberLike(item.count)}
+                            </span>
+                          </div>
+                          <div className={styles.barTrack}>
+                            <div
+                              className={styles.barFill}
+                              style={{
+                                ["--color" as never]: item.color,
+                                ["--size" as never]: `${leasingAvMax > 0 ? Math.round((item.value / leasingAvMax) * 100) : 0}%`,
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div className={styles.barTrack}>
-                          <div
-                            className={styles.barFill}
-                            style={{
-                              ["--color" as never]: item.color,
-                              ["--size" as never]: `${leasingAvMax > 0 ? Math.round((item.value / leasingAvMax) * 100) : 0}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                {getChartView(DASHBOARD_CHART_KEYS.leasingAv) === chartTypeIds.verticalId && (
+                  <VerticalBarChart
+                    ariaLabel="Лизинговые"
+                    emptyText="Сделок пока нет"
+                    bars={leasingSegments.map((item) => ({
+                      label: item.label,
+                      value: item.value,
+                      color: item.color,
+                      title: `${item.label}: ${formatMoneyLike(item.value)} ₽ · ${formatNumberLike(item.count)}`,
+                    }))}
+                  />
                 )}
-              {getChartView(DASHBOARD_CHART_KEYS.leasingAv) === chartTypeIds.verticalId && (
-                <VerticalBarChart
-                  ariaLabel="Лизинговые"
-                  emptyText="Сделок пока нет"
-                  bars={leasingSegments.map((item) => ({
-                    label: item.label,
-                    value: item.value,
-                    color: item.color,
-                    title: `${item.label}: ${formatMoneyLike(item.value)} ₽ · ${formatNumberLike(item.count)}`,
-                  }))}
-                />
-              )}
-              {getChartView(DASHBOARD_CHART_KEYS.leasingAv) === chartTypeIds.pieId && (
-                <PieChart
-                  ariaLabel="Лизинговые"
-                  emptyText="Сделок пока нет"
-                  segments={leasingSegments}
-                />
-              )}
-            </>
-          )}
+                {getChartView(DASHBOARD_CHART_KEYS.leasingAv) === chartTypeIds.pieId && (
+                  <PieChart
+                    ariaLabel="Лизинговые"
+                    emptyText="Сделок пока нет"
+                    segments={leasingSegments}
+                  />
+                )}
+              </>
+            )}
+          </div>
         </Card>
 
         <Card
@@ -752,59 +774,61 @@ export function DashboardsPage({ currentUser }: DashboardsPageProps) {
           className={styles.chartCard}
           actions={renderChartActions(DASHBOARD_CHART_KEYS.stageAv)}
         >
-          {isLoading ? (
-            <div className={styles.loading}>
-              <Spinner size={24} />
-              <div className={styles.loadingText}>Загрузка...</div>
-            </div>
-          ) : (
-            <>
-              {getChartView(DASHBOARD_CHART_KEYS.stageAv) !== chartTypeIds.verticalId &&
-                getChartView(DASHBOARD_CHART_KEYS.stageAv) !== chartTypeIds.pieId && (
-                  <div className={styles.barList}>
-                    {stageSegments.map((item) => (
-                      <div key={item.label} className={styles.barRow}>
-                        <div className={styles.barMeta}>
-                          <span className={styles.barLabel}>{item.label}</span>
-                          <span className={styles.barValue}>
-                            {formatMoneyLike(item.value)} ₽ ·{" "}
-                            {formatNumberLike(item.count)}
-                          </span>
+          <div className={styles.chartBody}>
+            {isLoading ? (
+              <div className={styles.loading}>
+                <Spinner size={24} />
+                <div className={styles.loadingText}>Загрузка...</div>
+              </div>
+            ) : (
+              <>
+                {getChartView(DASHBOARD_CHART_KEYS.stageAv) !== chartTypeIds.verticalId &&
+                  getChartView(DASHBOARD_CHART_KEYS.stageAv) !== chartTypeIds.pieId && (
+                    <div className={styles.barList}>
+                      {stageSegments.map((item) => (
+                        <div key={item.label} className={styles.barRow}>
+                          <div className={styles.barMeta}>
+                            <span className={styles.barLabel}>{item.label}</span>
+                            <span className={styles.barValue}>
+                              {formatMoneyLike(item.value)} ₽ ·{" "}
+                              {formatNumberLike(item.count)}
+                            </span>
+                          </div>
+                          <div className={styles.barTrack}>
+                            <div
+                              className={styles.barFill}
+                              style={{
+                                ["--color" as never]: item.color,
+                                ["--size" as never]: `${stageAvMax > 0 ? Math.round((item.value / stageAvMax) * 100) : 0}%`,
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div className={styles.barTrack}>
-                          <div
-                            className={styles.barFill}
-                            style={{
-                              ["--color" as never]: item.color,
-                              ["--size" as never]: `${stageAvMax > 0 ? Math.round((item.value / stageAvMax) * 100) : 0}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                {getChartView(DASHBOARD_CHART_KEYS.stageAv) === chartTypeIds.verticalId && (
+                  <VerticalBarChart
+                    ariaLabel="Этапы сделки"
+                    emptyText="Сделок пока нет"
+                    bars={stageSegments.map((item) => ({
+                      label: item.label,
+                      value: item.value,
+                      color: item.color,
+                      title: `${item.label}: ${formatMoneyLike(item.value)} ₽ · ${formatNumberLike(item.count)}`,
+                    }))}
+                  />
                 )}
-              {getChartView(DASHBOARD_CHART_KEYS.stageAv) === chartTypeIds.verticalId && (
-                <VerticalBarChart
-                  ariaLabel="Этапы сделки"
-                  emptyText="Сделок пока нет"
-                  bars={stageSegments.map((item) => ({
-                    label: item.label,
-                    value: item.value,
-                    color: item.color,
-                    title: `${item.label}: ${formatMoneyLike(item.value)} ₽ · ${formatNumberLike(item.count)}`,
-                  }))}
-                />
-              )}
-              {getChartView(DASHBOARD_CHART_KEYS.stageAv) === chartTypeIds.pieId && (
-                <PieChart
-                  ariaLabel="Этапы сделки"
-                  emptyText="Сделок пока нет"
-                  segments={stageSegments}
-                />
-              )}
-            </>
-          )}
+                {getChartView(DASHBOARD_CHART_KEYS.stageAv) === chartTypeIds.pieId && (
+                  <PieChart
+                    ariaLabel="Этапы сделки"
+                    emptyText="Сделок пока нет"
+                    segments={stageSegments}
+                  />
+                )}
+              </>
+            )}
+          </div>
         </Card>
       </div>
     </div>
