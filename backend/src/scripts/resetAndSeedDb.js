@@ -11,14 +11,6 @@ const argv = process.argv.slice(2);
 const shouldReset =
   argv.includes("--yes") || argv.includes("--force") || argv.includes("-y");
 
-const requiredEnv = (key) => {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Переменная окружения ${key} обязательна.`);
-  }
-  return value;
-};
-
 const quoteIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
 
 const getDbConfig = () => ({
@@ -195,7 +187,7 @@ const seedTestData = async (client) => {
     owner: { username: "ivan_ivanov", password: "Password123" },
     groupLeads: [
       { username: "kirill_petrov", password: "Password123" },
-      { username: "elena_morozova", password: "Password123" },
+      { username: "rita_orlova", password: "Password123" },
     ],
     managers: [
       { username: "sergey_sidorov", password: "Password123" },
@@ -227,8 +219,8 @@ const seedTestData = async (client) => {
   const groupLead2 = await insertUser(client, {
     ...credentials.groupLeads[1],
     roleId: groupLeadRoleId,
-    lastName: "Морозова",
-    firstName: "Елена",
+    lastName: "Орлова",
+    firstName: "Рита",
     middleName: "Андреевна",
   });
 
@@ -307,7 +299,6 @@ const seedTestData = async (client) => {
   const taxSystemIds = taxSystemsResult.rows.map((row) => row.id);
   const communicationChannelIds = communicationChannelsResult.rows.map((row) => row.id);
 
-  // Seed more data so dashboards have something to plot.
   const rng = mulberry32(20260430);
 
   const companies = [];
@@ -496,7 +487,6 @@ const seedTestData = async (client) => {
     "Пауза по инициативе клиента",
   ];
 
-  // More deals for charts: a good spread across lifecycle/status/stages/leasing.
   const seedDeal = async (company, lifecycleId, dealStatusId, leasingCompanyId, stageId, comment) => {
     const basePlCostRub = randomInt(rng, 500_000, 15_000_000);
     const plCostRub = rng() < 0.2 ? Number((basePlCostRub + rng()).toFixed(2)) : basePlCostRub;

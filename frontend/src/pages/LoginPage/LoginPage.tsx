@@ -1,14 +1,15 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../../api/authApi";
-import type { CurrentUser } from "../../types/user";
-import { getApiErrorMessage } from "../../utils/httpError";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
 import { Card } from "../../components/ui/Card/Card";
 import { Divider } from "../../components/ui/Divider/Divider";
 import { InputField } from "../../components/ui/Field/Field";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
+import type { CurrentUser } from "../../types/user";
+import { getApiErrorMessage } from "../../utils/httpError";
+import { hasValidationErrors, validateLoginForm } from "../../utils/validation";
 import styles from "./LoginPage.module.scss";
 
 interface LoginPageProps {
@@ -19,14 +20,17 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const validationErrors = validateLoginForm({ username, password });
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setShowValidationErrors(true);
 
-    if (!username.trim() || !password) {
-      setError("Введите логин и пароль.");
+    if (hasValidationErrors(validationErrors)) {
+      setError("Проверьте поля формы.");
       return;
     }
 
@@ -63,6 +67,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               placeholder="например: ivanov"
               disabled={isSubmitting}
               required
+              error={showValidationErrors ? validationErrors.username : undefined}
+              maxLength={50}
             />
 
             <InputField
@@ -73,6 +79,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               autoComplete="current-password"
               disabled={isSubmitting}
               required
+              error={showValidationErrors ? validationErrors.password : undefined}
             />
 
             {error && <Alert tone="error">{error}</Alert>}

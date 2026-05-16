@@ -39,7 +39,24 @@ import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
 import { getApiErrorMessage } from "../../utils/httpError";
 import { getRoleLabel } from "../../utils/roles";
+import {
+  COMMUNICATION_CHANNEL_NAME_MAX_LENGTH,
+  LEASING_COMPANY_NAME_MAX_LENGTH,
+  hasValidationErrors,
+  sanitizeByMaxLength,
+  sanitizePersonName,
+  sanitizeUsername,
+  validateCreateUserForm,
+  validateLookupName,
+  validateUserProfileForm,
+  type ValidationErrors,
+} from "../../utils/validation";
 import styles from "./SettingsPage.module.scss";
+
+type ProfileValidationErrors = ValidationErrors<"lastName" | "firstName" | "middleName">;
+type CreateUserValidationErrors = ValidationErrors<
+  "username" | "role" | "groupLeadUserId" | "lastName" | "firstName" | "middleName"
+>;
 
 interface SettingsPageProps {
   currentUser: CurrentUser;
@@ -68,6 +85,11 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const profileValidationErrors: ProfileValidationErrors = validateUserProfileForm({
+    lastName,
+    firstName,
+    middleName,
+  });
 
   useEffect(() => {
     setLastName(currentUser.lastName ?? "");
@@ -77,6 +99,12 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
 
   const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (hasValidationErrors(profileValidationErrors)) {
+      setProfileError("Проверьте поля формы.");
+      setProfileSuccess(null);
+      return;
+    }
 
     try {
       setIsProfileSaving(true);
@@ -155,6 +183,14 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [isLeasingCompanyUpdating, setIsLeasingCompanyUpdating] = useState(false);
   const [leasingCompanyUpdateError, setLeasingCompanyUpdateError] = useState<string | null>(null);
   const [deletingLeasingCompanyId, setDeletingLeasingCompanyId] = useState<number | null>(null);
+  const leasingCompanyCreateValidationError = validateLookupName(leasingCompanyName, {
+    label: "название лизинговой компании",
+    maxLength: LEASING_COMPANY_NAME_MAX_LENGTH,
+  });
+  const leasingCompanyEditValidationError = validateLookupName(leasingEditName, {
+    label: "название лизинговой компании",
+    maxLength: LEASING_COMPANY_NAME_MAX_LENGTH,
+  });
 
   const [communicationChannels, setCommunicationChannels] = useState<CommunicationChannel[]>([]);
   const [isCommunicationChannelsLoading, setIsCommunicationChannelsLoading] = useState(false);
@@ -175,6 +211,14 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [deletingCommunicationChannelId, setDeletingCommunicationChannelId] = useState<
     number | null
   >(null);
+  const communicationChannelCreateValidationError = validateLookupName(communicationChannelName, {
+    label: "название канала связи",
+    maxLength: COMMUNICATION_CHANNEL_NAME_MAX_LENGTH,
+  });
+  const communicationChannelEditValidationError = validateLookupName(communicationEditName, {
+    label: "название канала связи",
+    maxLength: COMMUNICATION_CHANNEL_NAME_MAX_LENGTH,
+  });
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -200,6 +244,14 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [createMiddleName, setCreateMiddleName] = useState("");
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const createValidationErrors: CreateUserValidationErrors = validateCreateUserForm({
+    username: createUsername,
+    role: createRole,
+    groupLeadUserId: createGroupLeadUserId,
+    lastName: createLastName,
+    firstName: createFirstName,
+    middleName: createMiddleName,
+  });
 
   const [isRowActionLoading, setIsRowActionLoading] = useState<number | null>(null);
   const [rowActionError, setRowActionError] = useState<string | null>(null);
@@ -294,8 +346,8 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const handleCreateLeasingCompany = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!leasingCompanyName.trim()) {
-      setLeasingCompanyCreateError("Введите название лизинговой компании.");
+    if (leasingCompanyCreateValidationError) {
+      setLeasingCompanyCreateError(leasingCompanyCreateValidationError);
       return;
     }
 
@@ -326,8 +378,8 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
 
     if (!leasingEditCandidate) return;
 
-    if (!leasingEditName.trim()) {
-      setLeasingCompanyUpdateError("Введите название лизинговой компании.");
+    if (leasingCompanyEditValidationError) {
+      setLeasingCompanyUpdateError(leasingCompanyEditValidationError);
       return;
     }
 
@@ -391,8 +443,8 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const handleCreateCommunicationChannel = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!communicationChannelName.trim()) {
-      setCommunicationChannelCreateError("Введите название канала связи.");
+    if (communicationChannelCreateValidationError) {
+      setCommunicationChannelCreateError(communicationChannelCreateValidationError);
       return;
     }
 
@@ -423,8 +475,8 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
 
     if (!communicationEditCandidate) return;
 
-    if (!communicationEditName.trim()) {
-      setCommunicationChannelUpdateError("Введите название канала связи.");
+    if (communicationChannelEditValidationError) {
+      setCommunicationChannelUpdateError(communicationChannelEditValidationError);
       return;
     }
 
@@ -491,13 +543,8 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!createUsername.trim()) {
-      setCreateError("Введите логин сотрудника.");
-      return;
-    }
-
-    if (createRole === "manager" && !createGroupLeadUserId) {
-      setCreateError("Для менеджера нужно выбрать руководителя группы.");
+    if (hasValidationErrors(createValidationErrors)) {
+      setCreateError("Проверьте поля формы.");
       return;
     }
 
@@ -575,21 +622,21 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
             <InputField
               label="Фамилия"
               value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
+              onChange={(event) => setLastName(sanitizePersonName(event.target.value))}
               disabled={isProfileSaving}
               placeholder="необязательно"
             />
             <InputField
               label="Имя"
               value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
+              onChange={(event) => setFirstName(sanitizePersonName(event.target.value))}
               disabled={isProfileSaving}
               placeholder="необязательно"
             />
             <InputField
               label="Отчество"
               value={middleName}
-              onChange={(event) => setMiddleName(event.target.value)}
+              onChange={(event) => setMiddleName(sanitizePersonName(event.target.value))}
               disabled={isProfileSaving}
               placeholder="необязательно"
             />
@@ -754,7 +801,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               <InputField
                 label="Логин"
                 value={createUsername}
-                onChange={(event) => setCreateUsername(event.target.value)}
+                onChange={(event) => setCreateUsername(sanitizeUsername(event.target.value))}
                 disabled={isCreateSubmitting}
                 placeholder="например: ivanov"
                 required
@@ -809,7 +856,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                 <InputField
                   label="Фамилия"
                   value={createLastName}
-                  onChange={(event) => setCreateLastName(event.target.value)}
+                  onChange={(event) => setCreateLastName(sanitizePersonName(event.target.value))}
                   disabled={isCreateSubmitting}
                   placeholder="необязательно"
                 />
@@ -817,7 +864,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                 <InputField
                   label="Имя"
                   value={createFirstName}
-                  onChange={(event) => setCreateFirstName(event.target.value)}
+                  onChange={(event) => setCreateFirstName(sanitizePersonName(event.target.value))}
                   disabled={isCreateSubmitting}
                   placeholder="необязательно"
                 />
@@ -825,7 +872,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                 <InputField
                   label="Отчество"
                   value={createMiddleName}
-                  onChange={(event) => setCreateMiddleName(event.target.value)}
+                  onChange={(event) => setCreateMiddleName(sanitizePersonName(event.target.value))}
                   disabled={isCreateSubmitting}
                   placeholder="необязательно"
                 />
@@ -1002,7 +1049,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               <InputField
                 label="Новая лизинговая"
                 value={leasingCompanyName}
-                onChange={(event) => setLeasingCompanyName(event.target.value)}
+                onChange={(event) => setLeasingCompanyName(sanitizeByMaxLength(event.target.value, LEASING_COMPANY_NAME_MAX_LENGTH))}
                 disabled={isLeasingCompanyCreating}
                 placeholder="например: ВТБ Лизинг"
                 required
@@ -1038,7 +1085,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               <InputField
                 label="Название"
                 value={leasingEditName}
-                onChange={(event) => setLeasingEditName(event.target.value)}
+                onChange={(event) => setLeasingEditName(sanitizeByMaxLength(event.target.value, LEASING_COMPANY_NAME_MAX_LENGTH))}
                 disabled={isLeasingCompanyUpdating}
                 required
               />
@@ -1175,7 +1222,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               <InputField
                 label="Новый канал"
                 value={communicationChannelName}
-                onChange={(event) => setCommunicationChannelName(event.target.value)}
+                onChange={(event) => setCommunicationChannelName(sanitizeByMaxLength(event.target.value, COMMUNICATION_CHANNEL_NAME_MAX_LENGTH))}
                 disabled={isCommunicationChannelCreating}
                 placeholder="например: Мессенджер"
                 required
@@ -1211,7 +1258,7 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
               <InputField
                 label="Название"
                 value={communicationEditName}
-                onChange={(event) => setCommunicationEditName(event.target.value)}
+                onChange={(event) => setCommunicationEditName(sanitizeByMaxLength(event.target.value, COMMUNICATION_CHANNEL_NAME_MAX_LENGTH))}
                 disabled={isCommunicationChannelUpdating}
                 required
               />

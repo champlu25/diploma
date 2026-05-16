@@ -16,6 +16,18 @@ import type { DealFormValues, DealLookups } from "../../types/deal";
 import type { CurrentUser, User } from "../../types/user";
 import { APP_ROUTES } from "../../constants/routes";
 import { getApiErrorMessage } from "../../utils/httpError";
+import {
+  hasValidationErrors,
+  sanitizeByMaxLength,
+  sanitizeDecimal,
+  sanitizeDigits,
+  sanitizeEmail,
+  sanitizePersonName,
+  sanitizePhone,
+  validateCompanyForm as validateCompanyFormShared,
+  validateDealForm as validateDealFormShared,
+  type ValidationErrors,
+} from "../../utils/validation";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
@@ -36,7 +48,7 @@ interface CompaniesPageProps {
   currentUser: CurrentUser;
 }
 
-type CompanyValidationErrors = Partial<Record<keyof CompanyFormValues, string>>;
+type CompanyValidationErrors = ValidationErrors<keyof CompanyFormValues>;
 
 const emptyForm: CompanyFormValues = {
   name: "",
@@ -59,42 +71,10 @@ const emptyForm: CompanyFormValues = {
   preferredCommunicationChannelId: "",
 };
 
-const validateCompanyForm = (values: CompanyFormValues): CompanyValidationErrors => {
-  const errors: CompanyValidationErrors = {};
+const validateCompanyForm = (values: CompanyFormValues): CompanyValidationErrors =>
+  validateCompanyFormShared(values);
 
-  if (!values.name.trim()) {
-    errors.name = "Наименование обязательно";
-  }
-
-  const inn = values.inn.trim();
-  if (!/^\d{10}(\d{2})?$/.test(inn)) {
-    errors.inn = "ИНН: 10 или 12 цифр";
-  }
-
-  const email = values.email.trim();
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = "Некорректный email";
-  }
-
-  const revenue = values.revenueRub.trim();
-  if (revenue && !/^\d+$/.test(revenue)) {
-    errors.revenueRub = "Выручка: число в рублях";
-  }
-
-  const hasAnyRequisites = Boolean(values.bik.trim() || values.rs.trim() || values.ks.trim());
-  if (hasAnyRequisites && (!values.bik.trim() || !values.rs.trim() || !values.ks.trim())) {
-    errors.bik = "Заполните БИК/РС/КС полностью";
-    errors.rs = "Заполните БИК/РС/КС полностью";
-    errors.ks = "Заполните БИК/РС/КС полностью";
-  }
-
-  return errors;
-};
-
-const hasValidationErrors = (errors: CompanyValidationErrors): boolean =>
-  Object.values(errors).some(Boolean);
-
-type DealValidationErrors = Partial<Record<keyof DealFormValues, string>>;
+type DealValidationErrors = ValidationErrors<keyof DealFormValues>;
 
 const emptyDealForm: DealFormValues = {
   need: "",
@@ -106,43 +86,8 @@ const emptyDealForm: DealFormValues = {
   comment: "",
 };
 
-const validateDealForm = (values: DealFormValues): DealValidationErrors => {
-  const errors: DealValidationErrors = {};
-
-  if (!values.need.trim()) {
-    errors.need = "Потребность обязательна";
-  }
-
-  if (!values.dealStatusId) {
-    errors.dealStatusId = "Выберите статус";
-  }
-
-  if (!values.leasingCompanyId) {
-    errors.leasingCompanyId = "Выберите лизинговую";
-  }
-
-  if (!values.dealStageId) {
-    errors.dealStageId = "Выберите этап";
-  }
-
-  if (!/^\d+$/.test(values.plCostRub.trim())) {
-    errors.plCostRub = "Укажите стоимость в рублях";
-  }
-
-  if (!/^\d+(\.\d+)?$/.test(values.agentFeePercent.trim())) {
-    errors.agentFeePercent = "Укажите процент";
-  } else {
-    const percent = Number(values.agentFeePercent);
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      errors.agentFeePercent = "0–100";
-    }
-  }
-
-  return errors;
-};
-
-const hasDealValidationErrors = (errors: DealValidationErrors): boolean =>
-  Object.values(errors).some(Boolean);
+const validateDealForm = (values: DealFormValues): DealValidationErrors =>
+  validateDealFormShared(values);
 
 const toDatetimeLocal = (value: string | null): string => {
   if (!value) {
@@ -305,12 +250,14 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
   const [createForm, setCreateForm] = useState<CompanyFormValues>(emptyForm);
   const [createErrors, setCreateErrors] = useState<CompanyValidationErrors>({});
+  const [showCreateErrors, setShowCreateErrors] = useState(false);
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const [editingCompanyId, setEditingCompanyId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<CompanyFormValues>(emptyForm);
   const [editErrors, setEditErrors] = useState<CompanyValidationErrors>({});
+  const [showEditErrors, setShowEditErrors] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [isDeleteSubmittingId, setIsDeleteSubmittingId] = useState<number | null>(null);
@@ -330,6 +277,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [dealLookups, setDealLookups] = useState<DealLookups | null>(null);
   const [dealForm, setDealForm] = useState<DealFormValues>(emptyDealForm);
   const [dealErrors, setDealErrors] = useState<DealValidationErrors>({});
+  const [showDealErrors, setShowDealErrors] = useState(false);
   const [isDealSubmitting, setIsDealSubmitting] = useState(false);
 
   const [transferTargets, setTransferTargets] = useState<User[] | null>(null);
@@ -337,6 +285,36 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isTransferSubmitting, setIsTransferSubmitting] = useState(false);
   const [transferTargetUserId, setTransferTargetUserId] = useState("");
+
+  const updateCreateForm = <K extends keyof CompanyFormValues>(field: K, value: CompanyFormValues[K]) => {
+    setCreateForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (showCreateErrors) {
+        setCreateErrors(validateCompanyForm(next));
+      }
+      return next;
+    });
+  };
+
+  const updateEditForm = <K extends keyof CompanyFormValues>(field: K, value: CompanyFormValues[K]) => {
+    setEditForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (showEditErrors) {
+        setEditErrors(validateCompanyForm(next));
+      }
+      return next;
+    });
+  };
+
+  const updateDealForm = <K extends keyof DealFormValues>(field: K, value: DealFormValues[K]) => {
+    setDealForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (showDealErrors) {
+        setDealErrors(validateDealForm(next));
+      }
+      return next;
+    });
+  };
 
   const creatingDealCompany = useMemo(
     () => companies.find((company) => company.id === creatingDealCompanyId) ?? null,
@@ -494,6 +472,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    setShowCreateErrors(true);
     const validationErrors = validateCompanyForm(createForm);
     setCreateErrors(validationErrors);
     if (hasValidationErrors(validationErrors)) {
@@ -508,6 +487,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       await loadCompanies();
       setCreateForm(emptyForm);
       setCreateErrors({});
+      setShowCreateErrors(false);
       setIsCreateModalOpen(false);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось создать компанию."));
@@ -526,6 +506,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setEditingCompanyId(company.id);
     setIsEditLoading(true);
     setEditErrors({});
+    setShowEditErrors(false);
 
     void (async () => {
       try {
@@ -593,6 +574,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setEditingCompanyId(null);
     setEditForm(emptyForm);
     setEditErrors({});
+    setShowEditErrors(false);
     setIsEditLoading(false);
   };
 
@@ -602,6 +584,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       return;
     }
 
+    setShowEditErrors(true);
     const validationErrors = validateCompanyForm(editForm);
     setEditErrors(validationErrors);
     if (hasValidationErrors(validationErrors)) {
@@ -639,6 +622,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setError(null);
     setDealForm(emptyDealForm);
     setDealErrors({});
+    setShowDealErrors(false);
     setCreatingDealCompanyId(company.id);
     void ensureDealLookups();
   };
@@ -648,15 +632,17 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setCreatingDealCompanyId(null);
     setDealForm(emptyDealForm);
     setDealErrors({});
+    setShowDealErrors(false);
   };
 
   const handleCreateDealSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!creatingDealCompany) return;
 
+    setShowDealErrors(true);
     const validationErrors = validateDealForm(dealForm);
     setDealErrors(validationErrors);
-    if (hasDealValidationErrors(validationErrors)) {
+    if (hasValidationErrors(validationErrors)) {
       setError("Проверьте поля формы.");
       return;
     }
@@ -1014,50 +1000,57 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
           if (isCreateSubmitting) return;
           setIsCreateModalOpen(false);
           setCreateErrors({});
+          setShowCreateErrors(false);
         }}
       >
-        <form className={styles.modalForm} onSubmit={handleCreateSubmit}>
+        <form className={styles.modalForm} onSubmit={handleCreateSubmit} noValidate>
           <InputField
             label="Наименование"
             value={createForm.name}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
+            onChange={(event) =>
+              updateCreateForm("name", sanitizeByMaxLength(event.target.value, 255))
+            }
             required
-            error={createErrors.name}
+            error={showCreateErrors ? createErrors.name : undefined}
             disabled={isCreateSubmitting}
+            maxLength={255}
           />
 
           <InputField
             label="ИНН"
             value={createForm.inn}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, inn: event.target.value }))}
+            onChange={(event) => updateCreateForm("inn", sanitizeDigits(event.target.value, 12))}
             required
-            error={createErrors.inn}
+            error={showCreateErrors ? createErrors.inn : undefined}
             disabled={isCreateSubmitting}
             inputMode="numeric"
+            maxLength={12}
           />
 
           <InputField
             label="Контактное лицо"
             value={createForm.contactName}
-            onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, contactName: event.target.value }))
-            }
+            onChange={(event) => updateCreateForm("contactName", sanitizePersonName(event.target.value))}
             disabled={isCreateSubmitting}
+            maxLength={100}
           />
 
           <InputField
             label="Телефон"
             value={createForm.phone}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, phone: event.target.value }))}
+            onChange={(event) => updateCreateForm("phone", sanitizePhone(event.target.value))}
+            error={showCreateErrors ? createErrors.phone : undefined}
             disabled={isCreateSubmitting}
+            maxLength={20}
           />
 
           <InputField
             label="Почта"
             value={createForm.email}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))}
-            error={createErrors.email}
+            onChange={(event) => updateCreateForm("email", sanitizeEmail(event.target.value))}
+            error={showCreateErrors ? createErrors.email : undefined}
             disabled={isCreateSubmitting}
+            maxLength={254}
           />
 
           <InputField
@@ -1065,8 +1058,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             type="datetime-local"
             value={createForm.nextContactAt}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, nextContactAt: event.target.value }))
+              updateCreateForm("nextContactAt", event.target.value)
             }
+            error={showCreateErrors ? createErrors.nextContactAt : undefined}
             disabled={isCreateSubmitting}
           />
 
@@ -1074,18 +1068,22 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Юридический адрес"
             value={createForm.legalAddress}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, legalAddress: event.target.value }))
+              updateCreateForm("legalAddress", sanitizeByMaxLength(event.target.value, 500))
             }
+            error={showCreateErrors ? createErrors.legalAddress : undefined}
             disabled={isCreateSubmitting}
+            maxLength={500}
           />
 
           <InputField
             label="Фактический адрес"
             value={createForm.actualAddress}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, actualAddress: event.target.value }))
+              updateCreateForm("actualAddress", sanitizeByMaxLength(event.target.value, 500))
             }
+            error={showCreateErrors ? createErrors.actualAddress : undefined}
             disabled={isCreateSubmitting}
+            maxLength={500}
           />
 
           <InputField
@@ -1093,8 +1091,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             type="date"
             value={createForm.directorBirthDate}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))
+              updateCreateForm("directorBirthDate", event.target.value)
             }
+            error={showCreateErrors ? createErrors.directorBirthDate : undefined}
             disabled={isCreateSubmitting}
           />
 
@@ -1102,20 +1101,22 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Вид деятельности"
             value={createForm.activity}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, activity: event.target.value }))
+              updateCreateForm("activity", sanitizeByMaxLength(event.target.value, 200))
             }
+            error={showCreateErrors ? createErrors.activity : undefined}
             disabled={isCreateSubmitting}
             rows={3}
+            maxLength={200}
           />
 
           <InputField
             label="Выручка, ₽"
             value={createForm.revenueRub}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, revenueRub: event.target.value }))
+              updateCreateForm("revenueRub", sanitizeDigits(event.target.value))
             }
             disabled={isCreateSubmitting}
-            error={createErrors.revenueRub}
+            error={showCreateErrors ? createErrors.revenueRub : undefined}
             inputMode="numeric"
           />
 
@@ -1123,22 +1124,22 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Выявленный негатив"
             value={createForm.negativeInfo}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, negativeInfo: event.target.value }))
+              updateCreateForm("negativeInfo", sanitizeByMaxLength(event.target.value, 2000))
             }
+            error={showCreateErrors ? createErrors.negativeInfo : undefined}
             disabled={isCreateSubmitting}
             rows={3}
+            maxLength={2000}
           />
 
           <SelectField
             label="Предпочитает общение через"
             value={createForm.preferredCommunicationChannelId}
             onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                preferredCommunicationChannelId: event.target.value,
-              }))
+              updateCreateForm("preferredCommunicationChannelId", event.target.value)
             }
             options={communicationChannelOptions}
+            error={showCreateErrors ? createErrors.preferredCommunicationChannelId : undefined}
             disabled={isCreateSubmitting}
           />
 
@@ -1146,44 +1147,53 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
             label="Система налогообложения"
             value={createForm.taxSystemId}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, taxSystemId: event.target.value }))
+              updateCreateForm("taxSystemId", event.target.value)
             }
             options={taxSystemOptions}
+            error={showCreateErrors ? createErrors.taxSystemId : undefined}
             disabled={isCreateSubmitting}
           />
 
           <InputField
             label="БИК"
             value={createForm.bik}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, bik: event.target.value }))}
+            onChange={(event) => updateCreateForm("bik", sanitizeDigits(event.target.value, 9))}
             disabled={isCreateSubmitting}
-            error={createErrors.bik}
+            error={showCreateErrors ? createErrors.bik : undefined}
+            inputMode="numeric"
+            maxLength={9}
           />
 
           <InputField
             label="Р/С"
             value={createForm.rs}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, rs: event.target.value }))}
+            onChange={(event) => updateCreateForm("rs", sanitizeDigits(event.target.value, 20))}
             disabled={isCreateSubmitting}
-            error={createErrors.rs}
+            error={showCreateErrors ? createErrors.rs : undefined}
+            inputMode="numeric"
+            maxLength={20}
           />
 
           <InputField
             label="К/С"
             value={createForm.ks}
-            onChange={(event) => setCreateForm((prev) => ({ ...prev, ks: event.target.value }))}
+            onChange={(event) => updateCreateForm("ks", sanitizeDigits(event.target.value, 20))}
             disabled={isCreateSubmitting}
-            error={createErrors.ks}
+            error={showCreateErrors ? createErrors.ks : undefined}
+            inputMode="numeric"
+            maxLength={20}
           />
 
           <TextAreaField
             label="Комментарий"
             value={createForm.comment}
             onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, comment: event.target.value }))
+              updateCreateForm("comment", sanitizeByMaxLength(event.target.value, 2000))
             }
+            error={showCreateErrors ? createErrors.comment : undefined}
             disabled={isCreateSubmitting}
             rows={4}
+            maxLength={2000}
           />
 
           <div className={styles.modalActions}>
@@ -1209,48 +1219,55 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         )}
 
         {editingCompany && !isEditLoading && (
-          <form className={styles.modalForm} onSubmit={handleEditSubmit}>
+          <form className={styles.modalForm} onSubmit={handleEditSubmit} noValidate>
             <InputField
               label="Наименование"
               value={editForm.name}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+              onChange={(event) =>
+                updateEditForm("name", sanitizeByMaxLength(event.target.value, 255))
+              }
               required
-              error={editErrors.name}
+              error={showEditErrors ? editErrors.name : undefined}
               disabled={isEditSubmitting}
+              maxLength={255}
             />
 
             <InputField
               label="ИНН"
               value={editForm.inn}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, inn: event.target.value }))}
+              onChange={(event) => updateEditForm("inn", sanitizeDigits(event.target.value, 12))}
               required
-              error={editErrors.inn}
+              error={showEditErrors ? editErrors.inn : undefined}
               disabled={isEditSubmitting}
               inputMode="numeric"
+              maxLength={12}
             />
 
             <InputField
               label="Контактное лицо"
               value={editForm.contactName}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, contactName: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("contactName", sanitizePersonName(event.target.value))}
+              error={showEditErrors ? editErrors.contactName : undefined}
               disabled={isEditSubmitting}
+              maxLength={100}
             />
 
             <InputField
               label="Телефон"
               value={editForm.phone}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
+              onChange={(event) => updateEditForm("phone", sanitizePhone(event.target.value))}
+              error={showEditErrors ? editErrors.phone : undefined}
               disabled={isEditSubmitting}
+              maxLength={20}
             />
 
             <InputField
               label="Почта"
               value={editForm.email}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
-              error={editErrors.email}
+              onChange={(event) => updateEditForm("email", sanitizeEmail(event.target.value))}
+              error={showEditErrors ? editErrors.email : undefined}
               disabled={isEditSubmitting}
+              maxLength={254}
             />
 
             <InputField
@@ -1258,8 +1275,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               type="datetime-local"
               value={editForm.nextContactAt}
               onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))
+                updateEditForm("nextContactAt", event.target.value)
               }
+              error={showEditErrors ? editErrors.nextContactAt : undefined}
               disabled={isEditSubmitting}
             />
 
@@ -1267,7 +1285,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="Комментарий"
               value={editForm.comment}
               onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, comment: event.target.value }))
+                updateEditForm("comment", event.target.value)
               }
               disabled={isEditSubmitting}
               rows={4}
@@ -1290,25 +1308,28 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         onClose={closeCreateDealModal}
       >
         {creatingDealCompany && (
-          <form className={styles.modalForm} onSubmit={handleCreateDealSubmit}>
+          <form className={styles.modalForm} onSubmit={handleCreateDealSubmit} noValidate>
             <TextAreaField
               label="Потребность"
               value={dealForm.need}
-              onChange={(event) => setDealForm((prev) => ({ ...prev, need: event.target.value }))}
+              onChange={(event) =>
+                updateDealForm("need", sanitizeByMaxLength(event.target.value, 500))
+              }
               required
-              error={dealErrors.need}
+              error={showDealErrors ? dealErrors.need : undefined}
               disabled={isDealSubmitting}
               rows={2}
+              maxLength={500}
             />
 
             <SelectField
               label="Статус"
               value={dealForm.dealStatusId}
               onChange={(event) =>
-                setDealForm((prev) => ({ ...prev, dealStatusId: event.target.value }))
+                updateDealForm("dealStatusId", event.target.value)
               }
               required
-              error={dealErrors.dealStatusId}
+              error={showDealErrors ? dealErrors.dealStatusId : undefined}
               disabled={isDealSubmitting || !dealLookups}
               options={dealStatusOptions}
             />
@@ -1317,22 +1338,25 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="Стоимость ПЛ, ₽"
               value={dealForm.plCostRub}
               onChange={(event) =>
-                setDealForm((prev) => ({ ...prev, plCostRub: event.target.value }))
+                updateDealForm(
+                  "plCostRub",
+                  sanitizeDecimal(event.target.value, { maxLength: 18, allowComma: true }),
+                )
               }
               required
-              error={dealErrors.plCostRub}
+              error={showDealErrors ? dealErrors.plCostRub : undefined}
               disabled={isDealSubmitting}
-              inputMode="numeric"
+              inputMode="decimal"
             />
 
             <SelectField
               label="Лизинговая"
               value={dealForm.leasingCompanyId}
               onChange={(event) =>
-                setDealForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))
+                updateDealForm("leasingCompanyId", event.target.value)
               }
               required
-              error={dealErrors.leasingCompanyId}
+              error={showDealErrors ? dealErrors.leasingCompanyId : undefined}
               disabled={isDealSubmitting || !dealLookups}
               options={leasingOptions}
             />
@@ -1341,10 +1365,13 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="АВ, %"
               value={dealForm.agentFeePercent}
               onChange={(event) =>
-                setDealForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))
+                updateDealForm(
+                  "agentFeePercent",
+                  sanitizeDecimal(event.target.value, { maxLength: 6, allowComma: true }),
+                )
               }
               required
-              error={dealErrors.agentFeePercent}
+              error={showDealErrors ? dealErrors.agentFeePercent : undefined}
               disabled={isDealSubmitting}
               inputMode="decimal"
             />
@@ -1353,8 +1380,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="АВ, руб."
               value={String(
                 Math.round(
-                  (Number(dealForm.plCostRub) || 0) *
-                    ((Number(dealForm.agentFeePercent) || 0) / 100),
+                  (Number(dealForm.plCostRub.replace(",", ".")) || 0) *
+                    ((Number(dealForm.agentFeePercent.replace(",", ".")) || 0) / 100),
                 ),
               )}
               disabled
@@ -1365,10 +1392,10 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="Этап сделки"
               value={dealForm.dealStageId}
               onChange={(event) =>
-                setDealForm((prev) => ({ ...prev, dealStageId: event.target.value }))
+                updateDealForm("dealStageId", event.target.value)
               }
               required
-              error={dealErrors.dealStageId}
+              error={showDealErrors ? dealErrors.dealStageId : undefined}
               disabled={isDealSubmitting || !dealLookups}
               options={stageOptions}
             />
@@ -1377,10 +1404,12 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               label="Комментарий"
               value={dealForm.comment}
               onChange={(event) =>
-                setDealForm((prev) => ({ ...prev, comment: event.target.value }))
+                updateDealForm("comment", sanitizeByMaxLength(event.target.value, 2000))
               }
+              error={showDealErrors ? dealErrors.comment : undefined}
               disabled={isDealSubmitting}
               rows={2}
+              maxLength={2000}
             />
 
             <div className={styles.modalActions}>
@@ -1427,3 +1456,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     </div>
   );
 }
+
+
+
+
+
+

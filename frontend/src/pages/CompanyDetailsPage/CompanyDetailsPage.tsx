@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { APP_ROUTES } from "../../constants/routes";
 import { getCompanyById, getCompanyLookups, updateCompany } from "../../api/companiesApi";
 import { getDealsByCompanyId } from "../../api/dealsApi";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
@@ -18,13 +19,47 @@ import { Spinner } from "../../components/ui/Spinner/Spinner";
 import type { CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { Deal } from "../../types/deal";
 import type { CurrentUser } from "../../types/user";
-import { APP_ROUTES } from "../../constants/routes";
 import { getApiErrorMessage } from "../../utils/httpError";
+import {
+  COMPANY_COMMENT_MAX_LENGTH,
+  COMPANY_NAME_MAX_LENGTH,
+  hasValidationErrors,
+  sanitizeByMaxLength,
+  sanitizeDigits,
+  sanitizeEmail,
+  sanitizePersonName,
+  sanitizePhone,
+  validateCompanyForm,
+  type ValidationErrors,
+} from "../../utils/validation";
 import styles from "./CompanyDetailsPage.module.scss";
 
 interface CompanyDetailsPageProps {
   currentUser: CurrentUser;
 }
+
+type CompanyValidationErrors = ValidationErrors<keyof CompanyFormValues>;
+
+const emptyForm: CompanyFormValues = {
+  name: "",
+  inn: "",
+  contactName: "",
+  phone: "",
+  email: "",
+  comment: "",
+  nextContactAt: "",
+  legalAddress: "",
+  actualAddress: "",
+  directorBirthDate: "",
+  activity: "",
+  revenueRub: "",
+  negativeInfo: "",
+  bik: "",
+  rs: "",
+  ks: "",
+  taxSystemId: "",
+  preferredCommunicationChannelId: "",
+};
 
 const formatDateTime = (value: string | null) => {
   if (!value) return "—";
@@ -74,7 +109,6 @@ const toDateInputValue = (value: string | null): string => {
     return "";
   }
 
-  // Accept both "YYYY-MM-DD" and ISO timestamps.
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return trimmed;
   }
@@ -94,64 +128,6 @@ const toDateInputValue = (value: string | null): string => {
   return parsed.toISOString().slice(0, 10);
 };
 
-type CompanyValidationErrors = Partial<Record<keyof CompanyFormValues, string>>;
-
-const validateCompanyForm = (values: CompanyFormValues): CompanyValidationErrors => {
-  const errors: CompanyValidationErrors = {};
-
-  if (!values.name.trim()) {
-    errors.name = "Наименование обязательно";
-  }
-
-  const inn = values.inn.trim();
-  if (!/^\d{10}(\d{2})?$/.test(inn)) {
-    errors.inn = "ИНН: 10 или 12 цифр";
-  }
-
-  const email = values.email.trim();
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = "Некорректный email";
-  }
-
-  const revenue = values.revenueRub.trim();
-  if (revenue && !/^\d+$/.test(revenue)) {
-    errors.revenueRub = "Выручка: число в рублях";
-  }
-
-  const hasAnyRequisites = Boolean(values.bik.trim() || values.rs.trim() || values.ks.trim());
-  if (hasAnyRequisites && (!values.bik.trim() || !values.rs.trim() || !values.ks.trim())) {
-    errors.bik = "Заполните БИК/РС/КС полностью";
-    errors.rs = "Заполните БИК/РС/КС полностью";
-    errors.ks = "Заполните БИК/РС/КС полностью";
-  }
-
-  return errors;
-};
-
-const hasValidationErrors = (errors: CompanyValidationErrors): boolean =>
-  Object.values(errors).some(Boolean);
-
-const emptyForm: CompanyFormValues = {
-  name: "",
-  inn: "",
-  contactName: "",
-  phone: "",
-  email: "",
-  comment: "",
-  nextContactAt: "",
-  legalAddress: "",
-  actualAddress: "",
-  directorBirthDate: "",
-  activity: "",
-  revenueRub: "",
-  negativeInfo: "",
-  bik: "",
-  rs: "",
-  ks: "",
-  taxSystemId: "",
-  preferredCommunicationChannelId: "",
-};
-
 export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
   const navigate = useNavigate();
   const params = useParams();
@@ -165,6 +141,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<CompanyFormValues>(emptyForm);
   const [editErrors, setEditErrors] = useState<CompanyValidationErrors>({});
+  const [showEditErrors, setShowEditErrors] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [taxSystemOptions, setTaxSystemOptions] = useState<SelectFieldOption[]>([
@@ -173,6 +150,19 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
   const [communicationChannelOptions, setCommunicationChannelOptions] = useState<
     SelectFieldOption[]
   >([{ value: "", label: "—" }]);
+
+  const updateEditForm = <K extends keyof CompanyFormValues>(
+    field: K,
+    value: CompanyFormValues[K],
+  ) => {
+    setEditForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (showEditErrors) {
+        setEditErrors(validateCompanyForm(next));
+      }
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     if (!Number.isInteger(companyId) || companyId <= 0) {
@@ -203,6 +193,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
     setIsEditOpen(true);
     setEditError(null);
     setEditErrors({});
+    setShowEditErrors(false);
     setEditForm({
       name: company.name,
       inn: company.inn,
@@ -250,6 +241,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
     event.preventDefault();
     if (!company) return;
 
+    setShowEditErrors(true);
     const validationErrors = validateCompanyForm(editForm);
     setEditErrors(validationErrors);
     if (hasValidationErrors(validationErrors)) {
@@ -387,9 +379,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <div className={styles.kvRow}>
               <span className={styles.kvKey}>Выручка</span>
               <span className={styles.kvValue}>
-                {company.revenueRub === null
-                  ? "—"
-                  : `${company.revenueRub.toLocaleString("ru-RU")} ₽`}
+                {company.revenueRub === null ? "—" : `${company.revenueRub.toLocaleString("ru-RU")} ₽`}
               </span>
             </div>
             <div className={styles.kvRow}>
@@ -473,6 +463,7 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
           setIsEditOpen(false);
           setEditError(null);
           setEditErrors({});
+          setShowEditErrors(false);
         }}
         className={styles.editModal}
       >
@@ -481,170 +472,172 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <InputField
               label="Наименование"
               value={editForm.name}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+              onChange={(event) => updateEditForm("name", sanitizeByMaxLength(event.target.value, COMPANY_NAME_MAX_LENGTH))}
               required
-              error={editErrors.name}
+              error={showEditErrors ? editErrors.name : undefined}
               disabled={isEditSubmitting}
+              maxLength={COMPANY_NAME_MAX_LENGTH}
             />
 
             <InputField
               label="ИНН"
               value={editForm.inn}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, inn: event.target.value }))}
+              onChange={(event) => updateEditForm("inn", sanitizeDigits(event.target.value, 12))}
               required
-              error={editErrors.inn}
+              error={showEditErrors ? editErrors.inn : undefined}
               disabled={isEditSubmitting}
               inputMode="numeric"
+              maxLength={12}
             />
 
             <InputField
               label="Контактное лицо"
               value={editForm.contactName}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, contactName: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("contactName", sanitizePersonName(event.target.value))}
+              error={showEditErrors ? editErrors.contactName : undefined}
               disabled={isEditSubmitting}
+              maxLength={100}
             />
 
             <InputField
               label="Телефон"
               value={editForm.phone}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
+              onChange={(event) => updateEditForm("phone", sanitizePhone(event.target.value))}
+              error={showEditErrors ? editErrors.phone : undefined}
               disabled={isEditSubmitting}
+              maxLength={20}
             />
 
             <InputField
               label="Почта"
               value={editForm.email}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
-              error={editErrors.email}
+              onChange={(event) => updateEditForm("email", sanitizeEmail(event.target.value))}
+              error={showEditErrors ? editErrors.email : undefined}
               disabled={isEditSubmitting}
+              maxLength={254}
             />
 
             <InputField
               label="Связаться"
               type="datetime-local"
               value={editForm.nextContactAt}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, nextContactAt: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("nextContactAt", event.target.value)}
+              error={showEditErrors ? editErrors.nextContactAt : undefined}
               disabled={isEditSubmitting}
             />
 
             <InputField
               label="БИК"
               value={editForm.bik}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, bik: event.target.value }))}
+              onChange={(event) => updateEditForm("bik", sanitizeDigits(event.target.value, 9))}
               disabled={isEditSubmitting}
-              error={editErrors.bik}
+              error={showEditErrors ? editErrors.bik : undefined}
+              inputMode="numeric"
+              maxLength={9}
             />
 
             <InputField
               label="Р/С"
               value={editForm.rs}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, rs: event.target.value }))}
+              onChange={(event) => updateEditForm("rs", sanitizeDigits(event.target.value, 20))}
               disabled={isEditSubmitting}
-              error={editErrors.rs}
+              error={showEditErrors ? editErrors.rs : undefined}
+              inputMode="numeric"
+              maxLength={20}
             />
 
             <InputField
               label="К/С"
               value={editForm.ks}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, ks: event.target.value }))}
+              onChange={(event) => updateEditForm("ks", sanitizeDigits(event.target.value, 20))}
               disabled={isEditSubmitting}
-              error={editErrors.ks}
+              error={showEditErrors ? editErrors.ks : undefined}
+              inputMode="numeric"
+              maxLength={20}
             />
 
             <SelectField
               label="Система налогообложения"
               value={editForm.taxSystemId}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, taxSystemId: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("taxSystemId", event.target.value)}
               options={taxSystemOptions}
+              error={showEditErrors ? editErrors.taxSystemId : undefined}
               disabled={isEditSubmitting}
             />
 
             <InputField
               label="Юридический адрес"
               value={editForm.legalAddress}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, legalAddress: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("legalAddress", sanitizeByMaxLength(event.target.value, 500))}
+              error={showEditErrors ? editErrors.legalAddress : undefined}
               disabled={isEditSubmitting}
+              maxLength={500}
             />
 
             <InputField
               label="Фактический адрес"
               value={editForm.actualAddress}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, actualAddress: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("actualAddress", sanitizeByMaxLength(event.target.value, 500))}
+              error={showEditErrors ? editErrors.actualAddress : undefined}
               disabled={isEditSubmitting}
+              maxLength={500}
             />
 
             <InputField
               label="День рождения директора"
               type="date"
               value={editForm.directorBirthDate}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, directorBirthDate: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("directorBirthDate", event.target.value)}
+              error={showEditErrors ? editErrors.directorBirthDate : undefined}
               disabled={isEditSubmitting}
             />
 
             <InputField
               label="Выручка, ₽"
               value={editForm.revenueRub}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, revenueRub: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("revenueRub", sanitizeDigits(event.target.value))}
               disabled={isEditSubmitting}
-              error={editErrors.revenueRub}
+              error={showEditErrors ? editErrors.revenueRub : undefined}
               inputMode="numeric"
             />
 
             <SelectField
               label="Предпочитает общение через"
               value={editForm.preferredCommunicationChannelId}
-              onChange={(event) =>
-                setEditForm((prev) => ({
-                  ...prev,
-                  preferredCommunicationChannelId: event.target.value,
-                }))
-              }
+              onChange={(event) => updateEditForm("preferredCommunicationChannelId", event.target.value)}
               options={communicationChannelOptions}
+              error={showEditErrors ? editErrors.preferredCommunicationChannelId : undefined}
               disabled={isEditSubmitting}
             />
 
             <TextAreaField
               label="Вид деятельности"
               value={editForm.activity}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, activity: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("activity", sanitizeByMaxLength(event.target.value, 200))}
+              error={showEditErrors ? editErrors.activity : undefined}
               disabled={isEditSubmitting}
               rows={3}
+              maxLength={200}
             />
 
             <TextAreaField
               label="Выявленный негатив"
               value={editForm.negativeInfo}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, negativeInfo: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("negativeInfo", sanitizeByMaxLength(event.target.value, 2000))}
+              error={showEditErrors ? editErrors.negativeInfo : undefined}
               disabled={isEditSubmitting}
               rows={3}
+              maxLength={2000}
             />
 
             <TextAreaField
               label="Комментарий"
               value={editForm.comment}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, comment: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("comment", sanitizeByMaxLength(event.target.value, COMPANY_COMMENT_MAX_LENGTH))}
+              error={showEditErrors ? editErrors.comment : undefined}
               disabled={isEditSubmitting}
               rows={4}
+              maxLength={COMPANY_COMMENT_MAX_LENGTH}
             />
           </div>
 
@@ -660,7 +653,12 @@ export function CompanyDetailsPage({ currentUser }: CompanyDetailsPageProps) {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setIsEditOpen(false)}
+              onClick={() => {
+                setIsEditOpen(false);
+                setEditError(null);
+                setEditErrors({});
+                setShowEditErrors(false);
+              }}
               disabled={isEditSubmitting}
             >
               Отмена

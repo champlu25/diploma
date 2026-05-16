@@ -40,7 +40,6 @@ router.get("/api/companies", requireAuth, async (req, res) => {
     const whereParts = [];
 
     if (req.auth.role === "owner") {
-      // no manager scope restriction
     } else if (req.auth.role === "group_lead") {
       params.push(currentUserId);
       whereParts.push(`

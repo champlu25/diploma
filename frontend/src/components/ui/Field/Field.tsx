@@ -37,7 +37,7 @@ export type InputFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "child
 export function InputField({ label, helperText, error, className, ...rest }: InputFieldProps) {
   return (
     <Field label={label} helperText={helperText} error={error} className={className}>
-      <input className={styles.control} {...rest} />
+      <input className={styles.control} aria-invalid={Boolean(error)} {...rest} />
     </Field>
   );
 }
@@ -58,7 +58,7 @@ export function TextAreaField({
 }: TextAreaFieldProps) {
   return (
     <Field label={label} helperText={helperText} error={error} className={className}>
-      <textarea className={clsx(styles.control, styles.textarea)} {...rest} />
+      <textarea className={clsx(styles.control, styles.textarea)} aria-invalid={Boolean(error)} {...rest} />
     </Field>
   );
 }
@@ -83,7 +83,7 @@ export function SelectField({
 }: SelectFieldProps) {
   return (
     <Field label={label} helperText={helperText} error={error} className={className}>
-      <select className={styles.control} {...rest}>
+      <select className={styles.control} aria-invalid={Boolean(error)} {...rest}>
         {options.map((option) => (
           <option key={option.value} value={option.value} disabled={option.disabled}>
             {option.label}

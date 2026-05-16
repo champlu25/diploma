@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { changePassword } from "../../api/authApi";
 import type { CurrentUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
+import { validateChangePasswordForm, hasValidationErrors } from "../../utils/validation";
 import { Alert } from "../ui/Alert/Alert";
 import { Button } from "../ui/Button/Button";
 import { Divider } from "../ui/Divider/Divider";
@@ -27,6 +28,7 @@ export function ChangePasswordModal({
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,13 +38,17 @@ export function ChangePasswordModal({
       return;
     }
 
-    if (!open) {
-      setOldPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setError(null);
-    }
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowValidationErrors(false);
+    setError(null);
   }, [open, currentUser.mustChangePassword]);
+
+  const validationErrors = validateChangePasswordForm(
+    { oldPassword, newPassword, confirmPassword },
+    { requireOldPassword: !forcedMode },
+  );
 
   const subtitle = forcedMode
     ? "Это временный пароль. Пожалуйста, задайте новый."
@@ -50,14 +56,10 @@ export function ChangePasswordModal({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setShowValidationErrors(true);
 
-    if ((!forcedMode && !oldPassword) || !newPassword || !confirmPassword) {
-      setError("Заполните все поля.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("Новый пароль и подтверждение не совпадают.");
+    if (hasValidationErrors(validationErrors)) {
+      setError("Проверьте поля формы.");
       return;
     }
 
@@ -95,6 +97,7 @@ export function ChangePasswordModal({
             disabled={isSubmitting}
             autoComplete="current-password"
             required
+            error={showValidationErrors ? validationErrors.oldPassword : undefined}
           />
         )}
 
@@ -106,6 +109,7 @@ export function ChangePasswordModal({
           disabled={isSubmitting}
           autoComplete="new-password"
           required
+          error={showValidationErrors ? validationErrors.newPassword : undefined}
         />
 
         <InputField
@@ -116,6 +120,7 @@ export function ChangePasswordModal({
           disabled={isSubmitting}
           autoComplete="new-password"
           required
+          error={showValidationErrors ? validationErrors.confirmPassword : undefined}
         />
 
         {error && <Alert tone="error">{error}</Alert>}

@@ -1,5 +1,7 @@
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { APP_ROUTES } from "../../constants/routes";
 import {
   deleteDeal,
   getDealLookups,
@@ -8,27 +10,35 @@ import {
   updateDealLifecycleStatus,
 } from "../../api/dealsApi";
 import { getGroupLeadManagers, getUsers } from "../../api/usersApi";
-import type { Deal, DealFormValues, DealLookups } from "../../types/deal";
-import type { CurrentUser } from "../../types/user";
-import { getApiErrorMessage } from "../../utils/httpError";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { Alert } from "../../components/ui/Alert/Alert";
 import { Button } from "../../components/ui/Button/Button";
-import { IconButton } from "../../components/ui/IconButton/IconButton";
-import { Icon } from "../../components/ui/Icon/Icon";
 import { InputField, SelectField, TextAreaField } from "../../components/ui/Field/Field";
+import { Icon } from "../../components/ui/Icon/Icon";
+import { IconButton } from "../../components/ui/IconButton/IconButton";
 import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { APP_ROUTES } from "../../constants/routes";
+import type { Deal, DealFormValues, DealLookups } from "../../types/deal";
+import type { CurrentUser } from "../../types/user";
+import { getApiErrorMessage } from "../../utils/httpError";
+import {
+  DEAL_COMMENT_MAX_LENGTH,
+  DEAL_NEED_MAX_LENGTH,
+  hasValidationErrors,
+  sanitizeByMaxLength,
+  sanitizeDecimal,
+  sanitizeDigits,
+  validateDealForm,
+  type ValidationErrors,
+} from "../../utils/validation";
 import styles from "./DealsPage.module.scss";
 
 interface DealsPageProps {
   currentUser: CurrentUser;
 }
 
-type DealValidationErrors = Partial<Record<keyof DealFormValues, string>>;
+type DealValidationErrors = ValidationErrors<keyof DealFormValues>;
 
 const emptyForm: DealFormValues = {
   need: "",
@@ -39,44 +49,6 @@ const emptyForm: DealFormValues = {
   dealStageId: "",
   comment: "",
 };
-
-const validateDealForm = (values: DealFormValues): DealValidationErrors => {
-  const errors: DealValidationErrors = {};
-
-  if (!values.need.trim()) {
-    errors.need = "Потребность обязательна";
-  }
-
-  if (!values.dealStatusId) {
-    errors.dealStatusId = "Выберите статус";
-  }
-
-  if (!values.leasingCompanyId) {
-    errors.leasingCompanyId = "Выберите лизинговую";
-  }
-
-  if (!values.dealStageId) {
-    errors.dealStageId = "Выберите этап";
-  }
-
-  if (!/^\d+$/.test(values.plCostRub.trim())) {
-    errors.plCostRub = "Укажите стоимость в рублях";
-  }
-
-  if (!/^\d+(\.\d+)?$/.test(values.agentFeePercent.trim())) {
-    errors.agentFeePercent = "Укажите процент";
-  } else {
-    const percent = Number(values.agentFeePercent);
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      errors.agentFeePercent = "0–100";
-    }
-  }
-
-  return errors;
-};
-
-const hasValidationErrors = (errors: DealValidationErrors): boolean =>
-  Object.values(errors).some(Boolean);
 
 const formatDateTime = (value: string) => {
   const date = new Date(value);
@@ -99,7 +71,7 @@ const formatNumberLike = (value: unknown): string => {
   }
 
   if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
+    const parsed = Number(value.replace(",", "."));
     if (Number.isFinite(parsed)) {
       return parsed.toLocaleString("ru-RU");
     }
@@ -107,6 +79,13 @@ const formatNumberLike = (value: unknown): string => {
   }
 
   return "—";
+};
+
+const formatAdvanceRub = (plCostRub: string, agentFeePercent: string): string => {
+  const cost = Number(plCostRub.replace(",", "."));
+  const percent = Number(agentFeePercent.replace(",", "."));
+  const advance = (Number.isFinite(cost) ? cost : 0) * ((Number.isFinite(percent) ? percent : 0) / 100);
+  return String(Math.round(advance));
 };
 
 export function DealsPage({ currentUser }: DealsPageProps) {
@@ -149,6 +128,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const [editingDealId, setEditingDealId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<DealFormValues>(emptyForm);
   const [editErrors, setEditErrors] = useState<DealValidationErrors>({});
+  const [showEditErrors, setShowEditErrors] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   const [isDeleteSubmittingId, setIsDeleteSubmittingId] = useState<number | null>(null);
@@ -156,6 +136,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const [detailsDealId, setDetailsDealId] = useState<number | null>(null);
   const [detailsNeed, setDetailsNeed] = useState("");
   const [detailsComment, setDetailsComment] = useState("");
+  const [showDetailsErrors, setShowDetailsErrors] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [isDetailsSubmitting, setIsDetailsSubmitting] = useState(false);
 
@@ -168,6 +149,16 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     () => deals.find((deal) => deal.id === detailsDealId) ?? null,
     [deals, detailsDealId],
   );
+
+  const updateEditForm = <K extends keyof DealFormValues>(field: K, value: DealFormValues[K]) => {
+    setEditForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (showEditErrors) {
+        setEditErrors(validateDealForm(next));
+      }
+      return next;
+    });
+  };
 
   const canManageDeal = useCallback(
     (deal: Deal): boolean =>
@@ -216,7 +207,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       try {
         const ownFilterOption = {
           value: String(currentUser.id),
-          label: "\u041c\u043e\u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
+          label: "Мои сделки",
         };
 
         if (currentUser.role === "owner") {
@@ -248,7 +239,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             { value: "", label: "Все менеджеры" },
             {
               value: String(currentUser.id),
-              label: "\u041c\u043e\u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
+              label: "Мои сделки",
             },
           ]);
         }
@@ -263,8 +254,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   }, [currentUser.id, currentUser.role, showManagerFilter]);
 
   useEffect(() => {
-    if (!showManagerFilter) return;
-    if (!managerFilterUserId) return;
+    if (!showManagerFilter || !managerFilterUserId) return;
     const exists = managerFilterOptions.some((option) => option.value === managerFilterUserId);
     if (!exists) {
       setManagerFilterUserId("");
@@ -385,6 +375,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const openEditModal = (deal: Deal) => {
     setError(null);
     setEditErrors({});
+    setShowEditErrors(false);
     setEditingDealId(deal.id);
     setEditForm({
       need: deal.need,
@@ -401,12 +392,14 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     setEditingDealId(null);
     setEditForm(emptyForm);
     setEditErrors({});
+    setShowEditErrors(false);
   };
 
   const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingDeal) return;
 
+    setShowEditErrors(true);
     const validationErrors = validateDealForm(editForm);
     setEditErrors(validationErrors);
     if (hasValidationErrors(validationErrors)) {
@@ -430,6 +423,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
   const openDetailsModal = (deal: Deal) => {
     setDetailsError(null);
+    setShowDetailsErrors(false);
     setDetailsDealId(deal.id);
     setDetailsNeed(deal.need);
     setDetailsComment(deal.comment ?? "");
@@ -440,20 +434,17 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     setDetailsDealId(null);
     setDetailsNeed("");
     setDetailsComment("");
+    setShowDetailsErrors(false);
     setDetailsError(null);
   };
 
   const handleDetailsSave = async () => {
     if (!detailsDeal) return;
 
-    if (!detailsNeed.trim()) {
-      setDetailsError("Потребность обязательна.");
-      return;
-    }
-
     try {
       setIsDetailsSubmitting(true);
       setDetailsError(null);
+      setShowDetailsErrors(true);
 
       const payload: DealFormValues = {
         need: detailsNeed,
@@ -502,11 +493,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
   const handleLifecycleStatusChange = async (deal: Deal, nextValue: string) => {
     const parsed = Number(nextValue);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      return;
-    }
-
-    if (parsed === deal.dealLifecycleStatusId) {
+    if (!Number.isInteger(parsed) || parsed <= 0 || parsed === deal.dealLifecycleStatusId) {
       return;
     }
 
@@ -523,6 +510,16 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     }
   };
 
+  const detailValidation = validateDealForm({
+    need: detailsNeed,
+    comment: detailsComment,
+    dealStatusId: detailsDeal ? String(detailsDeal.dealStatusId) : "1",
+    plCostRub: detailsDeal ? String(detailsDeal.plCostRub) : "0",
+    leasingCompanyId: detailsDeal ? String(detailsDeal.leasingCompanyId) : "1",
+    agentFeePercent: detailsDeal ? String(detailsDeal.agentFeePercent) : "0",
+    dealStageId: detailsDeal ? String(detailsDeal.dealStageId) : "1",
+  });
+
   return (
     <div className={styles.page}>
       <PageHeader
@@ -537,19 +534,21 @@ export function DealsPage({ currentUser }: DealsPageProps) {
           <InputField
             label="Фильтр по компании"
             value={searchCompanyName}
-            onChange={(event) => setSearchCompanyName(event.target.value)}
+            onChange={(event) => setSearchCompanyName(sanitizeByMaxLength(event.target.value, 255))}
             placeholder='Например: ООО "Ромашка"'
             disabled={Boolean(fixedCompany.companyId)}
+            maxLength={255}
           />
         </div>
         <div className={styles.filtersGrow}>
           <InputField
             label="Фильтр по ИНН"
             value={searchInn}
-            onChange={(event) => setSearchInn(event.target.value)}
+            onChange={(event) => setSearchInn(sanitizeDigits(event.target.value, 12))}
             placeholder="10 или 12 цифр"
             inputMode="numeric"
             disabled={Boolean(fixedCompany.companyId)}
+            maxLength={12}
           />
         </div>
         <div className={styles.filtersGrow}>
@@ -655,13 +654,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                 <Td>{formatDateTime(deal.createdAt)}</Td>
                 <Td>{formatDateTime(deal.updatedAt)}</Td>
                 {showCompletionColumn && (
-                  <Td>
-                    {deal.completedAt ? (
-                      formatDateTime(deal.completedAt)
-                    ) : (
-                      <span className={styles.muted}>—</span>
-                    )}
-                  </Td>
+                  <Td>{deal.completedAt ? formatDateTime(deal.completedAt) : <span className={styles.muted}>—</span>}</Td>
                 )}
                 <Td style={{ textAlign: "center" }}>
                   {canManage ? (
@@ -689,19 +682,13 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                             title="Удалить"
                             tone="danger"
                           >
-                            {isDeleteSubmitting ? (
-                              <Spinner size={18} />
-                            ) : (
-                              <Icon name="trash" size={18} />
-                            )}
+                            {isDeleteSubmitting ? <Spinner size={18} /> : <Icon name="trash" size={18} />}
                           </IconButton>
                         </div>
                         <select
                           className={styles.actionSelect}
                           value=""
-                          onChange={(event) =>
-                            void handleLifecycleStatusChange(deal, event.target.value)
-                          }
+                          onChange={(event) => void handleLifecycleStatusChange(deal, event.target.value)}
                           disabled={
                             isStatusSubmitting ||
                             !lookups ||
@@ -759,21 +746,20 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <TextAreaField
               label="Потребность"
               value={editForm.need}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, need: event.target.value }))}
+              onChange={(event) => updateEditForm("need", sanitizeByMaxLength(event.target.value, DEAL_NEED_MAX_LENGTH))}
               required
-              error={editErrors.need}
+              error={showEditErrors ? editErrors.need : undefined}
               disabled={isEditSubmitting}
               rows={3}
+              maxLength={DEAL_NEED_MAX_LENGTH}
             />
 
             <SelectField
               label="Статус"
               value={editForm.dealStatusId}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, dealStatusId: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("dealStatusId", event.target.value)}
               required
-              error={editErrors.dealStatusId}
+              error={showEditErrors ? editErrors.dealStatusId : undefined}
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
@@ -787,23 +773,19 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <InputField
               label="Стоимость ПЛ"
               value={editForm.plCostRub}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, plCostRub: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("plCostRub", sanitizeDecimal(event.target.value, { maxLength: 18, allowComma: true }))}
               required
-              error={editErrors.plCostRub}
+              error={showEditErrors ? editErrors.plCostRub : undefined}
               disabled={isEditSubmitting}
-              inputMode="numeric"
+              inputMode="decimal"
             />
 
             <SelectField
               label="Лизинговая"
               value={editForm.leasingCompanyId}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, leasingCompanyId: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("leasingCompanyId", event.target.value)}
               required
-              error={editErrors.leasingCompanyId}
+              error={showEditErrors ? editErrors.leasingCompanyId : undefined}
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
@@ -817,23 +799,16 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <InputField
               label="АВ, %"
               value={editForm.agentFeePercent}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, agentFeePercent: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("agentFeePercent", sanitizeDecimal(event.target.value, { maxLength: 6, allowComma: true }))}
               required
-              error={editErrors.agentFeePercent}
+              error={showEditErrors ? editErrors.agentFeePercent : undefined}
               disabled={isEditSubmitting}
               inputMode="decimal"
             />
 
             <InputField
               label="АВ, руб."
-              value={String(
-                Math.round(
-                  (Number(editForm.plCostRub) || 0) *
-                    ((Number(editForm.agentFeePercent) || 0) / 100),
-                ),
-              )}
+              value={formatAdvanceRub(editForm.plCostRub, editForm.agentFeePercent)}
               disabled
               inputMode="numeric"
             />
@@ -841,11 +816,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <SelectField
               label="Этап сделки"
               value={editForm.dealStageId}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, dealStageId: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("dealStageId", event.target.value)}
               required
-              error={editErrors.dealStageId}
+              error={showEditErrors ? editErrors.dealStageId : undefined}
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
@@ -859,11 +832,11 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <TextAreaField
               label="Комментарий"
               value={editForm.comment}
-              onChange={(event) =>
-                setEditForm((prev) => ({ ...prev, comment: event.target.value }))
-              }
+              onChange={(event) => updateEditForm("comment", sanitizeByMaxLength(event.target.value, DEAL_COMMENT_MAX_LENGTH))}
+              error={showEditErrors ? editErrors.comment : undefined}
               disabled={isEditSubmitting}
               rows={3}
+              maxLength={DEAL_COMMENT_MAX_LENGTH}
             />
 
             <div className={styles.modalActions}>
@@ -894,18 +867,22 @@ export function DealsPage({ currentUser }: DealsPageProps) {
             <TextAreaField
               label="Потребность"
               value={detailsNeed}
-              onChange={(event) => setDetailsNeed(event.target.value)}
+              onChange={(event) => setDetailsNeed(sanitizeByMaxLength(event.target.value, DEAL_NEED_MAX_LENGTH))}
+              error={showDetailsErrors ? detailValidation.need : undefined}
               disabled={isDetailsSubmitting}
               rows={6}
               required
+              maxLength={DEAL_NEED_MAX_LENGTH}
             />
 
             <TextAreaField
               label="Комментарий"
               value={detailsComment}
-              onChange={(event) => setDetailsComment(event.target.value)}
+              onChange={(event) => setDetailsComment(sanitizeByMaxLength(event.target.value, DEAL_COMMENT_MAX_LENGTH))}
+              error={showDetailsErrors ? detailValidation.comment : undefined}
               disabled={isDetailsSubmitting}
               rows={6}
+              maxLength={DEAL_COMMENT_MAX_LENGTH}
             />
 
             <div className={styles.modalActions}>
