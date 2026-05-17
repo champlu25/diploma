@@ -1,11 +1,11 @@
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { APP_ROUTES } from "../../constants/routes";
 import {
   deleteDeal,
   getDealLookups,
-  getDeals,
+  getDealsPage,
   updateDeal,
   updateDealLifecycleStatus,
 } from "../../api/dealsApi";
@@ -37,6 +37,8 @@ import styles from "./DealsPage.module.scss";
 interface DealsPageProps {
   currentUser: CurrentUser;
 }
+
+const PAGE_SIZE = 10;
 
 type DealValidationErrors = ValidationErrors<keyof DealFormValues>;
 
@@ -109,7 +111,10 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
   const [deals, setDeals] = useState<Deal[]>([]);
   const [lookups, setLookups] = useState<DealLookups | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [hasMoreDeals, setHasMoreDeals] = useState(true);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedLifecycleStatusId, setSelectedLifecycleStatusId] = useState<number | null>(null);
@@ -139,6 +144,8 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const [showDetailsErrors, setShowDetailsErrors] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [isDetailsSubmitting, setIsDetailsSubmitting] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const queryVersionRef = useRef(0);
 
   const editingDeal = useMemo(
     () => deals.find((deal) => deal.id === editingDealId) ?? null,
@@ -261,6 +268,29 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     }
   }, [managerFilterOptions, managerFilterUserId, showManagerFilter]);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadLookups = async () => {
+      try {
+        const nextLookups = await getDealLookups();
+        if (!isCancelled) {
+          setLookups(nextLookups);
+        }
+      } catch (requestError) {
+        if (!isCancelled) {
+          setError(getApiErrorMessage(requestError, "Не удалось загрузить справочники сделок."));
+        }
+      }
+    };
+
+    void loadLookups();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   const filteredDeals = deals;
 
   const fixedCompanyTitle = useMemo(() => {
@@ -286,30 +316,54 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     selectedLifecycleStatusName !== null && selectedLifecycleStatusName !== activeLifecycleLabel;
   const tableColSpan = (showActiveColumns ? 12 : 10) + (showCompletionColumn ? 1 : 0);
 
-  const loadDeals = useCallback(async () => {
+  const loadDealsPageChunk = useCallback(async (offset: number, append: boolean, version: number) => {
     try {
-      setIsLoading(true);
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsInitialLoading(true);
+      }
       setError(null);
 
-      const [nextDeals, nextLookups] = await Promise.all([
-        getDeals({
-          companyId: fixedCompany.companyId ? Number(fixedCompany.companyId) : undefined,
-          searchCompanyName,
-          searchInn,
-          managerUserId: managerFilterUserId,
-          lifecycleStatusId: selectedLifecycleStatusId,
-          dealStageId: dealStageFilter,
-          hotCold: hotColdFilter,
-          sort: dealSortMode,
-        }),
-        getDealLookups(),
-      ]);
-      setDeals(nextDeals);
-      setLookups(nextLookups);
+      const data = await getDealsPage({
+        companyId: fixedCompany.companyId ? Number(fixedCompany.companyId) : undefined,
+        searchCompanyName,
+        searchInn,
+        managerUserId: managerFilterUserId,
+        lifecycleStatusId: selectedLifecycleStatusId,
+        dealStageId: dealStageFilter,
+        hotCold: hotColdFilter,
+        sort: dealSortMode,
+        limit: PAGE_SIZE,
+        offset,
+      });
+
+      if (version !== queryVersionRef.current) {
+        return;
+      }
+
+      setDeals((prev) => (append ? prev.concat(data.deals) : data.deals));
+      setHasMoreDeals(data.hasMore);
+      setNextOffset(offset + data.deals.length);
     } catch (requestError) {
+      if (version !== queryVersionRef.current) {
+        return;
+      }
       setError(getApiErrorMessage(requestError, "Не удалось загрузить сделки."));
+      if (!append) {
+        setDeals([]);
+      }
+      setHasMoreDeals(false);
     } finally {
-      setIsLoading(false);
+      if (version !== queryVersionRef.current) {
+        return;
+      }
+
+      if (append) {
+        setIsLoadingMore(false);
+      } else {
+        setIsInitialLoading(false);
+      }
     }
   }, [
     dealSortMode,
@@ -322,9 +376,46 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     selectedLifecycleStatusId,
   ]);
 
+  const resetDeals = useCallback(async () => {
+    const version = queryVersionRef.current + 1;
+    queryVersionRef.current = version;
+    setDeals([]);
+    setHasMoreDeals(true);
+    setNextOffset(0);
+    setIsLoadingMore(false);
+    await loadDealsPageChunk(0, false, version);
+  }, [loadDealsPageChunk]);
+
   useEffect(() => {
-    void loadDeals();
-  }, [loadDeals]);
+    void resetDeals();
+  }, [resetDeals]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMoreDeals || isInitialLoading || isLoadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) {
+          return;
+        }
+
+        observer.disconnect();
+        void loadDealsPageChunk(nextOffset, true, queryVersionRef.current);
+      },
+      {
+        rootMargin: "200px 0px",
+      },
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMoreDeals, isInitialLoading, isLoadingMore, loadDealsPageChunk, nextOffset]);
 
   useEffect(() => {
     if (fixedCompany.companyId) {
@@ -412,7 +503,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       setError(null);
 
       await updateDeal(editingDeal.id, editForm);
-      await loadDeals();
+      await resetDeals();
       closeEditModal();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить сделку."));
@@ -463,7 +554,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       }
 
       await updateDeal(detailsDeal.id, payload);
-      await loadDeals();
+      await resetDeals();
       closeDetailsModal();
     } catch (requestError) {
       setDetailsError(getApiErrorMessage(requestError, "Не удалось обновить сделку."));
@@ -483,7 +574,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     try {
       setIsDeleteSubmittingId(deal.id);
       await deleteDeal(deal.id);
-      await loadDeals();
+      await resetDeals();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось удалить сделку."));
     } finally {
@@ -502,7 +593,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       setError(null);
 
       await updateDealLifecycleStatus(deal.id, parsed);
-      await loadDeals();
+      await resetDeals();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось изменить статус сделки."));
     } finally {
@@ -601,7 +692,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
                 type="button"
                 className={`${styles.statusLink} ${status.id === selectedLifecycleStatusId ? styles.statusActive : ""}`}
                 onClick={() => setSelectedLifecycleStatusId(status.id)}
-                disabled={isLoading}
+                disabled={isInitialLoading || isLoadingMore}
               >
                 {status.name}
               </button>
@@ -727,7 +818,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
         </tbody>
       </DataTable>
 
-      {isLoading && (
+      {hasMoreDeals && <div ref={loadMoreRef} className={styles.loadMoreTrigger} aria-hidden="true" />}
+
+      {(isInitialLoading || isLoadingMore) && (
         <div className={styles.loadingBlock}>
           <Spinner size={26} />
         </div>

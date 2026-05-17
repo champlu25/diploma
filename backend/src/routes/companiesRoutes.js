@@ -34,6 +34,10 @@ router.get("/api/companies", requireAuth, async (req, res) => {
   const searchInn = typeof req.query?.searchInn === "string" ? req.query.searchInn.trim() : "";
   const managerUserId = parseUserId(req.query?.managerUserId);
   const sortMode = typeof req.query?.sort === "string" ? req.query.sort : "created_desc";
+  const rawLimit = normalizeRequiredNonNegativeInteger(req.query?.limit);
+  const rawOffset = normalizeRequiredNonNegativeInteger(req.query?.offset);
+  const limit = rawLimit === null ? null : Math.min(Math.max(rawLimit, 1), 100);
+  const offset = rawOffset ?? 0;
 
   try {
     const params = [];
@@ -79,6 +83,14 @@ router.get("/api/companies", requireAuth, async (req, res) => {
       sortMode === "name_asc"
         ? "ORDER BY c.name ASC, c.id ASC"
         : "ORDER BY c.created_at DESC, c.id DESC";
+    const paginationSql =
+      limit === null
+        ? ""
+        : `LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+
+    if (limit !== null) {
+      params.push(limit + 1, offset);
+    }
 
     const result = await pool.query(
       `
@@ -103,12 +115,16 @@ router.get("/api/companies", requireAuth, async (req, res) => {
         JOIN users AS u ON u.id = c.manager_user_id
         ${whereSql}
         ${orderBySql}
+        ${paginationSql}
       `,
       params
     );
+    const hasMore = limit === null ? false : result.rows.length > limit;
+    const companies = hasMore ? result.rows.slice(0, limit) : result.rows;
 
     res.status(200).json({
-      companies: result.rows,
+      companies,
+      hasMore,
     });
   } catch (error) {
     console.error("Не удалось получить компании:", error);

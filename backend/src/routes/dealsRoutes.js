@@ -90,6 +90,10 @@ router.get("/api/deals", requireAuth, async (req, res) => {
   const dealStageId = parseUserId(req.query?.dealStageId);
   const hotColdFilter = typeof req.query?.hotCold === "string" ? req.query.hotCold : "";
   const sortMode = typeof req.query?.sort === "string" ? req.query.sort : "created_desc";
+  const rawLimit = normalizeRequiredNonNegativeInteger(req.query?.limit);
+  const rawOffset = normalizeRequiredNonNegativeInteger(req.query?.offset);
+  const limit = rawLimit === null ? null : Math.min(Math.max(rawLimit, 1), 100);
+  const offset = rawOffset ?? 0;
 
   try {
     const params = [];
@@ -156,6 +160,10 @@ router.get("/api/deals", requireAuth, async (req, res) => {
         : sortMode === "advance_desc"
           ? "ORDER BY ROUND((d.pl_cost_rub::NUMERIC * d.agent_fee_percent) / 100.0, 2) DESC, d.id DESC"
           : "ORDER BY d.created_at DESC, d.id DESC";
+    const paginationSql =
+      limit === null
+        ? ""
+        : `LIMIT ${addParam(limit + 1)} OFFSET ${addParam(offset)}`;
 
     const result = await pool.query(
       `
@@ -194,12 +202,16 @@ router.get("/api/deals", requireAuth, async (req, res) => {
         JOIN deal_stages AS st ON st.id = d.deal_stage_id
         ${whereSql}
         ${orderBySql}
+        ${paginationSql}
       `,
       params
     );
+    const hasMore = limit === null ? false : result.rows.length > limit;
+    const deals = hasMore ? result.rows.slice(0, limit) : result.rows;
 
     res.status(200).json({
-      deals: result.rows,
+      deals,
+      hasMore,
     });
   } catch (error) {
     console.error("Не удалось получить сделки:", error);

@@ -1,9 +1,9 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   createCompany,
   deleteCompany,
-  getCompanies,
+  getCompaniesPage,
   getCompanyById,
   getCompanyLookups,
   transferCompany,
@@ -47,6 +47,8 @@ import styles from "./CompaniesPage.module.scss";
 interface CompaniesPageProps {
   currentUser: CurrentUser;
 }
+
+const PAGE_SIZE = 10;
 
 type CompanyValidationErrors = ValidationErrors<keyof CompanyFormValues>;
 
@@ -245,7 +247,10 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [managerFilterOptions, setManagerFilterOptions] = useState<SelectFieldOption[]>([
     { value: "", label: "Все менеджеры" },
   ]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasMoreCompanies, setHasMoreCompanies] = useState(true);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [createForm, setCreateForm] = useState<CompanyFormValues>(emptyForm);
@@ -285,6 +290,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isTransferSubmitting, setIsTransferSubmitting] = useState(false);
   const [transferTargetUserId, setTransferTargetUserId] = useState("");
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const queryVersionRef = useRef(0);
 
   const updateCreateForm = <K extends keyof CompanyFormValues>(field: K, value: CompanyFormValues[K]) => {
     setCreateForm((prev) => {
@@ -321,27 +328,91 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     [companies, creatingDealCompanyId],
   );
 
-  const loadCompanies = useCallback(async () => {
+  const loadCompaniesPageChunk = useCallback(async (offset: number, append: boolean, version: number) => {
     try {
-      setIsLoading(true);
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsInitialLoading(true);
+      }
       setError(null);
-      const data = await getCompanies({
+      const data = await getCompaniesPage({
         searchName,
         searchInn,
         managerUserId: managerFilterUserId,
         sort: companySortMode,
+        limit: PAGE_SIZE,
+        offset,
       });
-      setCompanies(data);
+      if (version !== queryVersionRef.current) {
+        return;
+      }
+
+      setCompanies((prev) => (append ? prev.concat(data.companies) : data.companies));
+      setHasMoreCompanies(data.hasMore);
+      setNextOffset(offset + data.companies.length);
     } catch (requestError) {
+      if (version !== queryVersionRef.current) {
+        return;
+      }
       setError(getApiErrorMessage(requestError, "Не удалось загрузить компании."));
+      if (!append) {
+        setCompanies([]);
+      }
+      setHasMoreCompanies(false);
     } finally {
-      setIsLoading(false);
+      if (version !== queryVersionRef.current) {
+        return;
+      }
+
+      if (append) {
+        setIsLoadingMore(false);
+      } else {
+        setIsInitialLoading(false);
+      }
     }
   }, [companySortMode, managerFilterUserId, searchInn, searchName]);
 
+  const resetCompanies = useCallback(async () => {
+    const version = queryVersionRef.current + 1;
+    queryVersionRef.current = version;
+    setCompanies([]);
+    setHasMoreCompanies(true);
+    setNextOffset(0);
+    setIsLoadingMore(false);
+    await loadCompaniesPageChunk(0, false, version);
+  }, [loadCompaniesPageChunk]);
+
   useEffect(() => {
-    void loadCompanies();
-  }, [loadCompanies]);
+    void resetCompanies();
+  }, [resetCompanies]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMoreCompanies || isInitialLoading || isLoadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) {
+          return;
+        }
+
+        observer.disconnect();
+        void loadCompaniesPageChunk(nextOffset, true, queryVersionRef.current);
+      },
+      {
+        rootMargin: "200px 0px",
+      },
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMoreCompanies, isInitialLoading, isLoadingMore, loadCompaniesPageChunk, nextOffset]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -484,7 +555,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setIsCreateSubmitting(true);
       setError(null);
       await createCompany(createForm);
-      await loadCompanies();
+      await resetCompanies();
       setCreateForm(emptyForm);
       setCreateErrors({});
       setShowCreateErrors(false);
@@ -596,7 +667,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setIsEditSubmitting(true);
       setError(null);
       await updateCompany(editingCompany.id, editForm);
-      await loadCompanies();
+      await resetCompanies();
       closeEditModal();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось обновить компанию."));
@@ -671,7 +742,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     try {
       setIsDeleteSubmittingId(company.id);
       await deleteCompany(company.id);
-      await loadCompanies();
+      await resetCompanies();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось удалить компанию."));
     } finally {
@@ -741,7 +812,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
       setIsTransferSubmitting(true);
       await transferCompany(transferCompanyCandidate.id, targetUserId);
       closeTransferModal(true);
-      await loadCompanies();
+      await resetCompanies();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Не удалось передать компанию."));
     } finally {
@@ -987,7 +1058,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
         </tbody>
       </DataTable>
 
-      {isLoading && (
+      {hasMoreCompanies && <div ref={loadMoreRef} className={styles.loadMoreTrigger} aria-hidden="true" />}
+
+      {(isInitialLoading || isLoadingMore) && (
         <div className={styles.loadingBlock}>
           <Spinner size={26} />
         </div>

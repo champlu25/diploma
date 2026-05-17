@@ -11,6 +11,8 @@ export interface GetDealsParams {
   dealStageId?: string;
   hotCold?: string;
   sort?: string;
+  limit?: number;
+  offset?: number;
 }
 
 interface DealDto {
@@ -40,6 +42,12 @@ interface DealDto {
 
 interface ListDealsResponse {
   deals: DealDto[];
+  hasMore?: boolean;
+}
+
+export interface DealsPageResponse {
+  deals: Deal[];
+  hasMore: boolean;
 }
 
 type LookupsResponse = DealLookups;
@@ -93,11 +101,19 @@ const toPayload = (values: DealFormValues) => ({
   comment: values.comment,
 });
 
-export const getDeals = async (params?: GetDealsParams): Promise<Deal[]> => {
+export const getDealsPage = async (params?: GetDealsParams): Promise<DealsPageResponse> => {
   const { data } = await httpClient.get<ListDealsResponse>(API_ROUTES.deals, {
     params,
   });
-  return data.deals.map(toDeal);
+  return {
+    deals: data.deals.map(toDeal),
+    hasMore: data.hasMore ?? false,
+  };
+};
+
+export const getDeals = async (params?: GetDealsParams): Promise<Deal[]> => {
+  const data = await getDealsPage(params);
+  return data.deals;
 };
 
 export const getDealsByCompanyId = async (companyId: number): Promise<Deal[]> => {

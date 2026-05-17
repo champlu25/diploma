@@ -7,6 +7,8 @@ export interface GetCompaniesParams {
   searchInn?: string;
   managerUserId?: string;
   sort?: string;
+  limit?: number;
+  offset?: number;
 }
 
 interface CompanyDto {
@@ -39,6 +41,12 @@ interface CompanyDto {
 
 interface ListCompaniesResponse {
   companies: CompanyDto[];
+  hasMore?: boolean;
+}
+
+export interface CompaniesPageResponse {
+  companies: Company[];
+  hasMore: boolean;
 }
 
 interface CompanyDtoResponse {
@@ -127,11 +135,21 @@ const toCompanyDetails = (dto: CompanyDto): CompanyDetails => ({
   preferredCommunicationChannelName: dto.preferred_communication_channel_name ?? null,
 });
 
-export const getCompanies = async (params?: GetCompaniesParams): Promise<Company[]> => {
+export const getCompaniesPage = async (
+  params?: GetCompaniesParams,
+): Promise<CompaniesPageResponse> => {
   const { data } = await httpClient.get<ListCompaniesResponse>(API_ROUTES.companies, {
     params,
   });
-  return data.companies.map(toCompany);
+  return {
+    companies: data.companies.map(toCompany),
+    hasMore: data.hasMore ?? false,
+  };
+};
+
+export const getCompanies = async (params?: GetCompaniesParams): Promise<Company[]> => {
+  const data = await getCompaniesPage(params);
+  return data.companies;
 };
 
 export const getCompanyById = async (companyId: number): Promise<CompanyDetails> => {
