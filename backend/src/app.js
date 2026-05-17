@@ -1,4 +1,4 @@
-﻿const cors = require("cors");
+const cors = require("cors");
 const dotenv = require("dotenv");
 const express = require("express");
 
@@ -12,8 +12,8 @@ const docsRoutes = require("./routes/docsRoutes");
 const ownerRoutes = require("./routes/ownerRoutes");
 const usersRoutes = require("./routes/usersRoutes");
 
-const port = Number(process.env.PORT || 4000);
-const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const port = Number(process.env.PORT);
+const frontendOrigin = process.env.FRONTEND_ORIGIN;
 const app = express();
 
 app.use(
@@ -42,4 +42,3 @@ start().catch((error) => {
   console.error("Не удалось запустить сервер:", error);
   process.exit(1);
 });
-

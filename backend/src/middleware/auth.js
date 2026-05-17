@@ -1,16 +1,10 @@
-﻿const { signJwt, verifyJwt } = require("../security");
-const authTokenTtlHours = Number(process.env.AUTH_TOKEN_TTL_HOURS || 12);
-const authJwtSecret = process.env.AUTH_JWT_SECRET || "";
+const { signJwt, verifyJwt } = require("../security");
+
+const authTokenTtlHours = Number(process.env.AUTH_TOKEN_TTL_HOURS);
+const authJwtSecret = process.env.AUTH_JWT_SECRET;
 const authCookieName = "access_token";
 const isProduction = process.env.NODE_ENV === "production";
 
-if (!Number.isFinite(authTokenTtlHours) || authTokenTtlHours <= 0) {
-  throw new Error("AUTH_TOKEN_TTL_HOURS должен быть положительным числом.");
-}
-
-if (!authJwtSecret) {
-  throw new Error("AUTH_JWT_SECRET обязателен.");
-}
 const parseCookies = (cookieHeader) => {
   if (!cookieHeader) {
     return {};
@@ -108,6 +102,7 @@ const issueAuthCookie = ({ res, user }) => {
 
   res.cookie(authCookieName, token, getAuthCookieOptions());
 };
+
 module.exports = {
   authCookieName,
   getEmptyAuthCookieOptions,
