@@ -12,9 +12,9 @@ const docsRoutes = require("./routes/docsRoutes");
 const ownerRoutes = require("./routes/ownerRoutes");
 const usersRoutes = require("./routes/usersRoutes");
 
-const app = express();
 const port = Number(process.env.PORT || 4000);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const app = express();
 
 app.use(
   cors({
