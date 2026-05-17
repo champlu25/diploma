@@ -28,6 +28,35 @@ const ACTIVITY_MAX_LENGTH = 200;
 const NEGATIVE_INFO_MAX_LENGTH = 2000;
 
 const router = express.Router();
+
+const getCompanyStaticLookups = async () => {
+  const taxSystemsResult = await pool.query(
+    `
+      SELECT id, name
+      FROM tax_systems
+      ORDER BY id ASC
+    `
+  );
+
+  return {
+    taxSystems: taxSystemsResult.rows,
+  };
+};
+
+const getCompanyDynamicLookups = async () => {
+  const channelsResult = await pool.query(
+    `
+      SELECT id, name, is_active AS "isActive"
+      FROM communication_channels
+      WHERE is_active = TRUE
+      ORDER BY id ASC
+    `
+  );
+
+  return {
+    communicationChannels: channelsResult.rows,
+  };
+};
 router.get("/api/companies", requireAuth, async (req, res) => {
   const currentUserId = Number(req.auth.sub);
   const searchName = typeof req.query?.searchName === "string" ? req.query.searchName.trim() : "";
@@ -134,29 +163,38 @@ router.get("/api/companies", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/api/companies/static-lookups", requireAuth, async (_req, res) => {
+  try {
+    res.status(200).json(await getCompanyStaticLookups());
+  } catch (error) {
+    console.error("Не удалось получить статичные справочники компаний:", error);
+    res.status(500).json({
+      message: "Не удалось получить статичные справочники компаний.",
+    });
+  }
+});
+
+router.get("/api/companies/dynamic-lookups", requireAuth, async (_req, res) => {
+  try {
+    res.status(200).json(await getCompanyDynamicLookups());
+  } catch (error) {
+    console.error("Не удалось получить изменяемые справочники компаний:", error);
+    res.status(500).json({
+      message: "Не удалось получить изменяемые справочники компаний.",
+    });
+  }
+});
+
 router.get("/api/companies/lookups", requireAuth, async (_req, res) => {
   try {
-    const [taxSystemsResult, channelsResult] = await Promise.all([
-      pool.query(
-        `
-          SELECT id, name
-          FROM tax_systems
-          ORDER BY id ASC
-        `
-      ),
-      pool.query(
-        `
-          SELECT id, name, is_active AS "isActive"
-          FROM communication_channels
-          WHERE is_active = TRUE
-          ORDER BY id ASC
-        `
-      ),
+    const [staticLookups, dynamicLookups] = await Promise.all([
+      getCompanyStaticLookups(),
+      getCompanyDynamicLookups(),
     ]);
 
     res.status(200).json({
-      taxSystems: taxSystemsResult.rows,
-      communicationChannels: channelsResult.rows,
+      ...staticLookups,
+      ...dynamicLookups,
     });
   } catch (error) {
     console.error("Не удалось получить справочники компаний:", error);

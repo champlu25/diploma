@@ -206,6 +206,8 @@ const openApiSpec = {
       "Companies",
       "Получить справочники компаний",
     ),
+    "/api/companies/static-lookups": getProtected("Companies", "Get static company lookups"),
+    "/api/companies/dynamic-lookups": getProtected("Companies", "Get dynamic company lookups"),
     "/api/companies/{companyId}": {
       parameters: [pathId("companyId")],
       get: protectedOperation("Companies", "Получить компанию"),
@@ -230,6 +232,8 @@ const openApiSpec = {
     },
     "/api/deals/lookups": getProtected("Deals", "Получить справочники сделок"),
     "/api/deals": getProtected("Deals", "Получить список сделок"),
+    "/api/deals/static-lookups": getProtected("Deals", "Get static deal lookups"),
+    "/api/deals/dynamic-lookups": getProtected("Deals", "Get dynamic deal lookups"),
     "/api/companies/{companyId}/deals": {
       parameters: [pathId("companyId")],
       post: {

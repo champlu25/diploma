@@ -4,10 +4,12 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { APP_ROUTES } from "../../constants/routes";
 import {
   deleteDeal,
-  getDealLookups,
+  getDealDynamicLookups,
+  getDealStaticLookups,
   getDealsPage,
   updateDeal,
   updateDealLifecycleStatus,
+  type DealStaticLookupsResponse,
 } from "../../api/dealsApi";
 import { getGroupLeadManagers, getUsers } from "../../api/usersApi";
 import { DataTable, Td, Th, Tr } from "../../components/DataTable/DataTable";
@@ -19,7 +21,7 @@ import { Icon } from "../../components/ui/Icon/Icon";
 import { IconButton } from "../../components/ui/IconButton/IconButton";
 import { Modal } from "../../components/ui/Modal/Modal";
 import { Spinner } from "../../components/ui/Spinner/Spinner";
-import type { Deal, DealFormValues, DealLookups } from "../../types/deal";
+import type { Deal, DealFormValues, DealLookups, DealLookupItem } from "../../types/deal";
 import type { CurrentUser } from "../../types/user";
 import { getApiErrorMessage } from "../../utils/httpError";
 import {
@@ -110,7 +112,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   }, [searchParams]);
 
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [lookups, setLookups] = useState<DealLookups | null>(null);
+  const [staticLookups, setStaticLookups] = useState<DealStaticLookupsResponse | null>(null);
+  const [leasingCompanies, setLeasingCompanies] = useState<DealLookupItem[]>([]);
+  const [isLeasingCompaniesLoading, setIsLeasingCompaniesLoading] = useState(false);
   const [hasMoreDeals, setHasMoreDeals] = useState(true);
   const [nextOffset, setNextOffset] = useState(0);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
@@ -157,6 +161,17 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     [deals, detailsDealId],
   );
 
+  const lookups = useMemo<DealLookups | null>(() => {
+    if (!staticLookups) {
+      return null;
+    }
+
+    return {
+      ...staticLookups,
+      leasingCompanies,
+    };
+  }, [leasingCompanies, staticLookups]);
+
   const updateEditForm = <K extends keyof DealFormValues>(field: K, value: DealFormValues[K]) => {
     setEditForm((prev) => {
       const next = { ...prev, [field]: value };
@@ -187,12 +202,12 @@ export function DealsPage({ currentUser }: DealsPageProps) {
   const dealStageOptions = useMemo(
     () => [
       { value: "", label: "Все этапы" },
-      ...(lookups?.dealStages ?? []).map((item) => ({
+      ...(staticLookups?.dealStages ?? []).map((item) => ({
         value: String(item.id),
         label: item.name,
       })),
     ],
-    [lookups],
+    [staticLookups],
   );
 
   useEffect(() => {
@@ -273,9 +288,9 @@ export function DealsPage({ currentUser }: DealsPageProps) {
 
     const loadLookups = async () => {
       try {
-        const nextLookups = await getDealLookups();
+        const nextLookups = await getDealStaticLookups();
         if (!isCancelled) {
-          setLookups(nextLookups);
+          setStaticLookups(nextLookups);
         }
       } catch (requestError) {
         if (!isCancelled) {
@@ -463,6 +478,22 @@ export function DealsPage({ currentUser }: DealsPageProps) {
     setSelectedLifecycleStatusId(fallbackId);
   }, [deals, fixedCompany.companyId, lookups, selectedLifecycleStatusId]);
 
+  const ensureLeasingCompanies = useCallback(async () => {
+    if (leasingCompanies.length > 0) {
+      return leasingCompanies;
+    }
+
+    setIsLeasingCompaniesLoading(true);
+
+    try {
+      const dynamicLookups = await getDealDynamicLookups();
+      setLeasingCompanies(dynamicLookups.leasingCompanies);
+      return dynamicLookups.leasingCompanies;
+    } finally {
+      setIsLeasingCompaniesLoading(false);
+    }
+  }, [leasingCompanies]);
+
   const openEditModal = (deal: Deal) => {
     setError(null);
     setEditErrors({});
@@ -476,6 +507,10 @@ export function DealsPage({ currentUser }: DealsPageProps) {
       agentFeePercent: String(deal.agentFeePercent),
       dealStageId: String(deal.dealStageId),
       comment: deal.comment ?? "",
+    });
+
+    void ensureLeasingCompanies().catch((requestError) => {
+      setError(getApiErrorMessage(requestError, "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р»РёР·РёРЅРіРѕРІС‹Рµ РєРѕРјРїР°РЅРёРё."));
     });
   };
 
@@ -853,7 +888,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
               onChange={(event) => updateEditForm("dealStatusId", event.target.value)}
               required
               error={showEditErrors ? editErrors.dealStatusId : undefined}
-              disabled={isEditSubmitting || !lookups}
+              disabled={isEditSubmitting || !lookups || isLeasingCompaniesLoading}
               options={[
                 { value: "", label: "Выберите", disabled: true },
                 ...(lookups?.dealStatuses ?? []).map((item) => ({
@@ -882,7 +917,7 @@ export function DealsPage({ currentUser }: DealsPageProps) {
               disabled={isEditSubmitting || !lookups}
               options={[
                 { value: "", label: "Выберите", disabled: true },
-                ...(lookups?.leasingCompanies ?? []).map((item) => ({
+                ...leasingCompanies.map((item) => ({
                   value: String(item.id),
                   label: item.name,
                 })),

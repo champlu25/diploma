@@ -67,10 +67,40 @@ export interface CommunicationChannelLookupItem extends CompanyLookupItem {
   isActive?: boolean;
 }
 
-interface CompanyLookupsResponse {
+export interface CompanyStaticLookupsResponse {
   taxSystems: CompanyLookupItem[];
+}
+
+export interface CompanyDynamicLookupsResponse {
   communicationChannels: CommunicationChannelLookupItem[];
 }
+
+export interface CompanyLookupsResponse
+  extends CompanyStaticLookupsResponse,
+    CompanyDynamicLookupsResponse {}
+
+let companyStaticLookupsPromise: Promise<CompanyStaticLookupsResponse> | null = null;
+
+const fetchCompanyStaticLookups = async (): Promise<CompanyStaticLookupsResponse> => {
+  const { data } = await httpClient.get<CompanyStaticLookupsResponse>(API_ROUTES.companyStaticLookups);
+  return data;
+};
+
+export const getCompanyStaticLookups = async (): Promise<CompanyStaticLookupsResponse> => {
+  if (!companyStaticLookupsPromise) {
+    companyStaticLookupsPromise = fetchCompanyStaticLookups().catch((error: unknown) => {
+      companyStaticLookupsPromise = null;
+      throw error;
+    });
+  }
+
+  return companyStaticLookupsPromise;
+};
+
+export const getCompanyDynamicLookups = async (): Promise<CompanyDynamicLookupsResponse> => {
+  const { data } = await httpClient.get<CompanyDynamicLookupsResponse>(API_ROUTES.companyDynamicLookups);
+  return data;
+};
 
 interface DeleteCompanyResponse {
   message: string;
@@ -158,8 +188,15 @@ export const getCompanyById = async (companyId: number): Promise<CompanyDetails>
 };
 
 export const getCompanyLookups = async (): Promise<CompanyLookupsResponse> => {
-  const { data } = await httpClient.get<CompanyLookupsResponse>(API_ROUTES.companyLookups);
-  return data;
+  const [staticLookups, dynamicLookups] = await Promise.all([
+    getCompanyStaticLookups(),
+    getCompanyDynamicLookups(),
+  ]);
+
+  return {
+    ...staticLookups,
+    ...dynamicLookups,
+  };
 };
 
 export const createCompany = async (values: CompanyFormValues): Promise<CompanyResponse> => {

@@ -17,59 +17,94 @@ const DEAL_NEED_MAX_LENGTH = 500;
 const DEAL_COMMENT_MAX_LENGTH = 2000;
 
 const router = express.Router();
+
+const getDealStaticLookups = async () => {
+  const [statusesResult, lifecycleStatusesResult, stagesResult] = await Promise.all([
+    pool.query(
+      `
+        SELECT
+          id,
+          name
+        FROM deal_statuses
+        ORDER BY id ASC
+      `
+    ),
+    pool.query(
+      `
+        SELECT
+          id,
+          name
+        FROM deal_lifecycle_statuses
+        ORDER BY id ASC
+      `
+    ),
+    pool.query(
+      `
+        SELECT
+          id,
+          name
+        FROM deal_stages
+        ORDER BY id ASC
+      `
+    ),
+  ]);
+
+  return {
+    dealStatuses: statusesResult.rows,
+    dealLifecycleStatuses: lifecycleStatusesResult.rows,
+    dealStages: stagesResult.rows,
+  };
+};
+
+const getDealDynamicLookups = async () => {
+  const leasingCompaniesResult = await pool.query(
+    `
+      SELECT
+        id,
+        name
+      FROM leasing_companies
+      WHERE is_active = TRUE
+      ORDER BY id ASC
+    `
+  );
+
+  return {
+    leasingCompanies: leasingCompaniesResult.rows,
+  };
+};
+
+router.get("/api/deals/static-lookups", requireAuth, async (_req, res) => {
+  try {
+    res.status(200).json(await getDealStaticLookups());
+  } catch (error) {
+    console.error("Не удалось получить статичные справочники сделок:", error);
+    res.status(500).json({
+      message: "Не удалось получить статичные справочники сделок.",
+    });
+  }
+});
+
+router.get("/api/deals/dynamic-lookups", requireAuth, async (_req, res) => {
+  try {
+    res.status(200).json(await getDealDynamicLookups());
+  } catch (error) {
+    console.error("Не удалось получить изменяемые справочники сделок:", error);
+    res.status(500).json({
+      message: "Не удалось получить изменяемые справочники сделок.",
+    });
+  }
+});
+
 router.get("/api/deals/lookups", requireAuth, async (_req, res) => {
   try {
-    const [
-      statusesResult,
-      lifecycleStatusesResult,
-      leasingCompaniesResult,
-      stagesResult,
-    ] =
-      await Promise.all([
-        pool.query(
-          `
-          SELECT
-            id,
-            name
-          FROM deal_statuses
-          ORDER BY id ASC
-        `
-        ),
-        pool.query(
-          `
-          SELECT
-            id,
-            name
-          FROM deal_lifecycle_statuses
-          ORDER BY id ASC
-        `
-        ),
-        pool.query(
-          `
-          SELECT
-            id,
-            name
-          FROM leasing_companies
-          WHERE is_active = TRUE
-          ORDER BY id ASC
-        `
-        ),
-        pool.query(
-          `
-          SELECT
-            id,
-            name
-          FROM deal_stages
-          ORDER BY id ASC
-        `
-        ),
-      ]);
+    const [staticLookups, dynamicLookups] = await Promise.all([
+      getDealStaticLookups(),
+      getDealDynamicLookups(),
+    ]);
 
     res.status(200).json({
-      dealStatuses: statusesResult.rows,
-      dealLifecycleStatuses: lifecycleStatusesResult.rows,
-      leasingCompanies: leasingCompaniesResult.rows,
-      dealStages: stagesResult.rows,
+      ...staticLookups,
+      ...dynamicLookups,
     });
   } catch (error) {
     console.error("Не удалось получить справочники сделок:", error);

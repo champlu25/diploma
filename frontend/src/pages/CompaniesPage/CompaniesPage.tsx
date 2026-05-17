@@ -6,10 +6,14 @@ import {
   getCompaniesPage,
   getCompanyById,
   getCompanyLookups,
+  type CompanyLookupsResponse,
   transferCompany,
   updateCompany,
 } from "../../api/companiesApi";
-import { createDeal, getDealLookups } from "../../api/dealsApi";
+import {
+  createDeal,
+  getDealLookups,
+} from "../../api/dealsApi";
 import { getGroupLeadManagers, getTransferTargets, getUsers } from "../../api/usersApi";
 import type { Company, CompanyDetails, CompanyFormValues } from "../../types/company";
 import type { DealFormValues, DealLookups } from "../../types/deal";
@@ -323,6 +327,44 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     });
   };
 
+  const applyCompanyLookups = useCallback((lookups: CompanyLookupsResponse) => {
+    setCompanyLookups({
+      taxSystems: lookups.taxSystems.map((item) => ({ id: item.id, name: item.name })),
+      communicationChannels: lookups.communicationChannels.map((item) => ({
+        id: item.id,
+        name: item.name,
+      })),
+    });
+    setCommunicationChannelOptions([
+      { value: "", label: "вЂ”" },
+      ...lookups.communicationChannels.map((item) => ({
+        value: String(item.id),
+        label: item.name,
+      })),
+    ]);
+    setTaxSystemOptions([
+      { value: "", label: "вЂ”" },
+      ...lookups.taxSystems.map((item) => ({ value: String(item.id), label: item.name })),
+    ]);
+  }, []);
+
+  const ensureCompanyLookups = useCallback(async () => {
+    if (companyLookups) {
+      return companyLookups;
+    }
+
+    const lookups = await getCompanyLookups();
+    applyCompanyLookups(lookups);
+
+    return {
+      taxSystems: lookups.taxSystems.map((item) => ({ id: item.id, name: item.name })),
+      communicationChannels: lookups.communicationChannels.map((item) => ({
+        id: item.id,
+        name: item.name,
+      })),
+    };
+  }, [applyCompanyLookups, companyLookups]);
+
   const creatingDealCompany = useMemo(
     () => companies.find((company) => company.id === creatingDealCompanyId) ?? null,
     [companies, creatingDealCompanyId],
@@ -418,6 +460,8 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     let isCancelled = false;
 
     const loadLookups = async () => {
+      return;
+
       try {
         const lookups = await getCompanyLookups();
         if (isCancelled) return;
@@ -582,7 +626,7 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     void (async () => {
       try {
         const [lookups, details] = await Promise.all([
-          companyLookups ? Promise.resolve(companyLookups) : getCompanyLookups(),
+          ensureCompanyLookups(),
           getCompanyById(company.id),
         ]);
 
@@ -695,7 +739,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
     setDealErrors({});
     setShowDealErrors(false);
     setCreatingDealCompanyId(company.id);
-    void ensureDealLookups();
+    void ensureDealLookups().catch((requestError) => {
+      setError(getApiErrorMessage(requestError, "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїСЂР°РІРѕС‡РЅРёРєРё СЃРґРµР»РѕРє."));
+    });
   };
 
   const closeCreateDealModal = () => {
@@ -900,6 +946,9 @@ export function CompaniesPage({ currentUser }: CompaniesPageProps) {
               setCreateForm(emptyForm);
               setCreateErrors({});
               setIsCreateModalOpen(true);
+              void ensureCompanyLookups().catch((requestError) => {
+                setError(getApiErrorMessage(requestError, "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїСЂР°РІРѕС‡РЅРёРєРё РєРѕРјРїР°РЅРёР№."));
+              });
             }}
             title="Добавить компанию"
           >

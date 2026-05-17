@@ -1,6 +1,11 @@
 import { httpClient } from "./httpClient";
 import { API_ROUTES } from "../constants/api";
-import type { Deal, DealFormValues, DealLookups } from "../types/deal";
+import type {
+  Deal,
+  DealFormValues,
+  DealLookups,
+  DealLookupItem,
+} from "../types/deal";
 
 export interface GetDealsParams {
   companyId?: number;
@@ -50,7 +55,38 @@ export interface DealsPageResponse {
   hasMore: boolean;
 }
 
-type LookupsResponse = DealLookups;
+export interface DealStaticLookupsResponse {
+  dealStatuses: DealLookupItem[];
+  dealLifecycleStatuses: DealLookupItem[];
+  dealStages: DealLookupItem[];
+}
+
+export interface DealDynamicLookupsResponse {
+  leasingCompanies: DealLookupItem[];
+}
+
+let dealStaticLookupsPromise: Promise<DealStaticLookupsResponse> | null = null;
+
+const fetchDealStaticLookups = async (): Promise<DealStaticLookupsResponse> => {
+  const { data } = await httpClient.get<DealStaticLookupsResponse>(API_ROUTES.dealStaticLookups);
+  return data;
+};
+
+export const getDealStaticLookups = async (): Promise<DealStaticLookupsResponse> => {
+  if (!dealStaticLookupsPromise) {
+    dealStaticLookupsPromise = fetchDealStaticLookups().catch((error: unknown) => {
+      dealStaticLookupsPromise = null;
+      throw error;
+    });
+  }
+
+  return dealStaticLookupsPromise;
+};
+
+export const getDealDynamicLookups = async (): Promise<DealDynamicLookupsResponse> => {
+  const { data } = await httpClient.get<DealDynamicLookupsResponse>(API_ROUTES.dealDynamicLookups);
+  return data;
+};
 
 interface DealDtoResponse {
   message: string;
@@ -121,8 +157,15 @@ export const getDealsByCompanyId = async (companyId: number): Promise<Deal[]> =>
 };
 
 export const getDealLookups = async (): Promise<DealLookups> => {
-  const { data } = await httpClient.get<LookupsResponse>(API_ROUTES.dealLookups);
-  return data;
+  const [staticLookups, dynamicLookups] = await Promise.all([
+    getDealStaticLookups(),
+    getDealDynamicLookups(),
+  ]);
+
+  return {
+    ...staticLookups,
+    ...dynamicLookups,
+  };
 };
 
 export const createDeal = async (

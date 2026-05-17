@@ -9,11 +9,15 @@ export const API_ROUTES = {
   companies: "/api/companies",
   companyById: (companyId: number) => `/api/companies/${companyId}`,
   companyLookups: "/api/companies/lookups",
+  companyStaticLookups: "/api/companies/static-lookups",
+  companyDynamicLookups: "/api/companies/dynamic-lookups",
   companyTransfer: (companyId: number) => `/api/companies/${companyId}/transfer`,
 
   deals: "/api/deals",
   dealById: (dealId: number) => `/api/deals/${dealId}`,
   dealLookups: "/api/deals/lookups",
+  dealStaticLookups: "/api/deals/static-lookups",
+  dealDynamicLookups: "/api/deals/dynamic-lookups",
   companyDeals: (companyId: number) => `/api/companies/${companyId}/deals`,
   dealLifecycleStatus: (dealId: number) => `/api/deals/${dealId}/lifecycle-status`,
 
