@@ -184,19 +184,19 @@ const seedTestData = async (client) => {
   }
 
   const credentials = {
-    owner: { username: "ivan_ivanov", password: "Password123" },
+    owner: { username: "admin", password: "admin123" },
     groupLeads: [
-      { username: "kirill_petrov", password: "Password123" },
-      { username: "rita_orlova", password: "Password123" },
+      { username: "group_lead", password: "group_lead123" },
+      { username: "group_lead2", password: "group_lead123" },
     ],
     managers: [
-      { username: "sergey_sidorov", password: "Password123" },
-      { username: "anna_kuznetsova", password: "Password123" },
-      { username: "alexey_smirnov", password: "Password123" },
-      { username: "maria_vasileva", password: "Password123" },
-      { username: "dmitry_popov", password: "Password123" },
-      { username: "olga_novikova", password: "Password123" },
-      { username: "nikita_fyodorov", password: "Password123" },
+      { username: "manager", password: "manger123" },
+      { username: "manager2", password: "manger123" },
+      { username: "manager3", password: "manger123" },
+      { username: "manager4", password: "manger123" },
+      { username: "manager5", password: "manger123" },
+      { username: "manager6", password: "manger123" },
+      { username: "manager7", password: "manger123" },
     ],
   };
 
