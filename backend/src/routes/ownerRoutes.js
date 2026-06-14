@@ -11,6 +11,322 @@ const COMMUNICATION_CHANNEL_NAME_MAX_LENGTH = 50;
 const PERSON_NAME_MAX_LENGTH = 100;
 
 const router = express.Router();
+router.patch("/api/owner/users/:userId", requireOwner, async (req, res) => {
+  const userId = parseUserId(req.params?.userId);
+  const username = normalizeUsername(req.body?.username);
+  const roleName = normalizeRole(req.body?.role);
+  const lastName = normalizeOptionalText(req.body?.lastName);
+  const firstName = normalizeOptionalText(req.body?.firstName);
+  const middleName = normalizeOptionalText(req.body?.middleName);
+  const groupLeadUserIdRaw = req.body?.groupLeadUserId;
+  const groupLeadUserId =
+    groupLeadUserIdRaw === null || typeof groupLeadUserIdRaw === "undefined"
+      ? null
+      : parseUserId(groupLeadUserIdRaw);
+
+  if (!userId) {
+    res.status(400).json({
+      message: "Некорректный userId.",
+    });
+    return;
+  }
+
+  if (!username || !roleName) {
+    res.status(400).json({
+      message: "Поля username и role обязательны.",
+    });
+    return;
+  }
+
+  if (!isUsernameValid(username)) {
+    res.status(400).json({
+      message:
+        "Username должен содержать от 3 до 50 символов и состоять только из строчных латинских букв, цифр, точек, дефисов и символа подчеркивания.",
+    });
+    return;
+  }
+
+  if (
+    lastName &&
+    (!isPersonNameValid(lastName) || lastName.length > PERSON_NAME_MAX_LENGTH)
+  ) {
+    res.status(400).json({
+      message:
+        "Фамилия может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (
+    firstName &&
+    (!isPersonNameValid(firstName) || firstName.length > PERSON_NAME_MAX_LENGTH)
+  ) {
+    res.status(400).json({
+      message:
+        "Имя может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (
+    middleName &&
+    (!isPersonNameValid(middleName) || middleName.length > PERSON_NAME_MAX_LENGTH)
+  ) {
+    res.status(400).json({
+      message:
+        "Отчество может содержать только буквы, пробелы и дефис, длина - до 100 символов.",
+    });
+    return;
+  }
+
+  if (roleName !== "owner" && roleName !== "manager" && roleName !== "group_lead") {
+    res.status(400).json({
+      message: "Роль должна быть owner, manager или group_lead.",
+    });
+    return;
+  }
+
+  if (
+    groupLeadUserIdRaw !== null &&
+    typeof groupLeadUserIdRaw !== "undefined" &&
+    !groupLeadUserId
+  ) {
+    res.status(400).json({
+      message: "Некорректный groupLeadUserId.",
+    });
+    return;
+  }
+
+  if (groupLeadUserId && groupLeadUserId === userId) {
+    res.status(400).json({
+      message: "Пользователь не может быть руководителем своей же группы.",
+    });
+    return;
+  }
+
+  if (roleName === "manager" && !groupLeadUserId) {
+    res.status(400).json({
+      message: "Для менеджера нужно указать руководителя группы.",
+    });
+    return;
+  }
+
+  if (roleName !== "manager" && groupLeadUserId !== null) {
+    res.status(400).json({
+      message: "Руководитель группы указывается только для роли manager.",
+    });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const targetUserResult = await client.query(
+      `
+        SELECT
+          u.id,
+          u.username,
+          r.name AS role
+        FROM users AS u
+        JOIN roles AS r ON r.id = u.role_id
+        WHERE u.id = $1
+        LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (targetUserResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({
+        message: "Пользователь не найден.",
+      });
+      return;
+    }
+
+    const targetUser = targetUserResult.rows[0];
+
+    if (targetUser.role === "owner" && roleName !== "owner") {
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        message: "Нельзя изменить роль владельца системы.",
+      });
+      return;
+    }
+
+    if (targetUser.role !== "owner" && roleName === "owner") {
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        message: "Назначение роли owner не поддерживается.",
+      });
+      return;
+    }
+
+    const duplicateResult = await client.query(
+      `
+        SELECT 1
+        FROM users
+        WHERE username = $1
+          AND id <> $2
+        LIMIT 1
+      `,
+      [username, userId]
+    );
+
+    if (duplicateResult.rowCount > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({
+        message: "Пользователь с таким username уже существует.",
+      });
+      return;
+    }
+
+    if (roleName === "manager") {
+      const groupLeadResult = await client.query(
+        `
+          SELECT
+            u.id,
+            r.name AS role
+          FROM users AS u
+          JOIN roles AS r ON r.id = u.role_id
+          WHERE u.id = $1
+          LIMIT 1
+        `,
+        [groupLeadUserId]
+      );
+
+      if (groupLeadResult.rowCount === 0) {
+        await client.query("ROLLBACK");
+        res.status(404).json({
+          message: "Руководитель группы не найден.",
+        });
+        return;
+      }
+
+      if (groupLeadResult.rows[0].role !== "group_lead") {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          message: "Указанный пользователь не является руководителем группы.",
+        });
+        return;
+      }
+    }
+
+    if (targetUser.role === "group_lead" && roleName !== "group_lead") {
+      const subordinateManagersResult = await client.query(
+        `
+          SELECT 1
+          FROM users AS u
+          JOIN roles AS r ON r.id = u.role_id
+          WHERE u.group_lead_user_id = $1
+            AND r.name = 'manager'
+          LIMIT 1
+        `,
+        [userId]
+      );
+
+      if (subordinateManagersResult.rowCount > 0) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          message:
+            "Нельзя изменить роль руководителя группы, пока за ним закреплены менеджеры.",
+        });
+        return;
+      }
+    }
+
+    const roleResult = await client.query(
+      `
+        SELECT id
+        FROM roles
+        WHERE name = $1
+        LIMIT 1
+      `,
+      [roleName]
+    );
+
+    if (roleResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({
+        message: "Роль не найдена в базе данных.",
+      });
+      return;
+    }
+
+    const updateResult = await client.query(
+      `
+        UPDATE users
+        SET
+          username = $1,
+          last_name = $2,
+          first_name = $3,
+          middle_name = $4,
+          role_id = $5,
+          group_lead_user_id = $6,
+          updated_at = NOW()
+        WHERE id = $7
+        RETURNING id
+      `,
+      [
+        username,
+        lastName,
+        firstName,
+        middleName,
+        roleResult.rows[0].id,
+        roleName === "manager" ? groupLeadUserId : null,
+        userId,
+      ]
+    );
+
+    const updatedUserResult = await client.query(
+      `
+        SELECT
+          u.id,
+          u.username,
+          u.last_name,
+          u.first_name,
+          u.middle_name,
+          r.name AS role,
+          u.group_lead_user_id,
+          gl.username AS group_lead_username,
+          u.must_change_password,
+          u.created_at,
+          u.updated_at
+        FROM users AS u
+        JOIN roles AS r ON r.id = u.role_id
+        LEFT JOIN users AS gl ON gl.id = u.group_lead_user_id
+        WHERE u.id = $1
+        LIMIT 1
+      `,
+      [updateResult.rows[0].id]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      message: "Пользователь обновлен.",
+      user: updatedUserResult.rows[0],
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+
+    if (error?.code === "23505") {
+      res.status(409).json({
+        message: "Пользователь с таким username уже существует.",
+      });
+      return;
+    }
+
+    console.error("Не удалось обновить пользователя:", error);
+    res.status(500).json({
+      message: "Не удалось обновить пользователя.",
+    });
+  } finally {
+    client.release();
+  }
+});
+
 router.patch(
   "/api/owner/users/:userId/group-lead",
   requireOwner,

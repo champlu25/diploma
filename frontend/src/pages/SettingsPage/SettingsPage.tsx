@@ -7,7 +7,9 @@ import {
   getGroupLeadManagers,
   getUsers,
   resetUserPassword,
+  updateUser,
   type CreateUserRole,
+  type EditableUserRole,
   type GroupManager,
 } from "../../api/usersApi";
 import {
@@ -47,6 +49,7 @@ import {
   sanitizePersonName,
   sanitizeUsername,
   validateCreateUserForm,
+  validateEditUserForm,
   validateLookupName,
   validateUserProfileForm,
   type ValidationErrors,
@@ -55,6 +58,9 @@ import styles from "./SettingsPage.module.scss";
 
 type ProfileValidationErrors = ValidationErrors<"lastName" | "firstName" | "middleName">;
 type CreateUserValidationErrors = ValidationErrors<
+  "username" | "role" | "groupLeadUserId" | "lastName" | "firstName" | "middleName"
+>;
+type EditUserValidationErrors = ValidationErrors<
   "username" | "role" | "groupLeadUserId" | "lastName" | "firstName" | "middleName"
 >;
 
@@ -252,6 +258,24 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
     firstName: createFirstName,
     middleName: createMiddleName,
   });
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editUserId, setEditUserId] = useState<number | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editRole, setEditRole] = useState<EditableUserRole>("manager");
+  const [editGroupLeadUserId, setEditGroupLeadUserId] = useState<string>("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editMiddleName, setEditMiddleName] = useState("");
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editValidationErrors: EditUserValidationErrors = validateEditUserForm({
+    username: editUsername,
+    role: editRole,
+    groupLeadUserId: editGroupLeadUserId,
+    lastName: editLastName,
+    firstName: editFirstName,
+    middleName: editMiddleName,
+  });
 
   const [isRowActionLoading, setIsRowActionLoading] = useState<number | null>(null);
   const [rowActionError, setRowActionError] = useState<string | null>(null);
@@ -262,6 +286,10 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
   const [passwordModalValue, setPasswordModalValue] = useState<string | null>(null);
 
   const groupLeads = useMemo(() => users.filter((user) => user.role === "group_lead"), [users]);
+  const editableGroupLeads = useMemo(
+    () => groupLeads.filter((user) => user.id !== editUserId),
+    [editUserId, groupLeads],
+  );
 
   const loadUsers = useCallback(async () => {
     if (!isOwner) {
@@ -584,6 +612,90 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
     }
   };
 
+  const closeEditModal = () => {
+    if (isEditSubmitting) {
+      return;
+    }
+
+    setEditModalOpen(false);
+    setEditUserId(null);
+    setEditUsername("");
+    setEditRole("manager");
+    setEditGroupLeadUserId("");
+    setEditLastName("");
+    setEditFirstName("");
+    setEditMiddleName("");
+    setEditError(null);
+  };
+
+  const openEditUser = (user: User) => {
+    setEditUserId(user.id);
+    setEditUsername(user.username);
+    setEditRole(user.role);
+    setEditGroupLeadUserId(user.groupLeadUserId ? String(user.groupLeadUserId) : "");
+    setEditLastName(user.lastName ?? "");
+    setEditFirstName(user.firstName ?? "");
+    setEditMiddleName(user.middleName ?? "");
+    setEditError(null);
+    setEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (editUserId === null) {
+      return;
+    }
+
+    if (hasValidationErrors(editValidationErrors)) {
+      setEditError("Проверьте поля формы.");
+      return;
+    }
+
+    try {
+      setIsEditSubmitting(true);
+      setEditError(null);
+
+      const result = await updateUser(editUserId, {
+        username: editUsername.trim(),
+        role: editRole,
+        groupLeadUserId: editRole === "manager" ? Number(editGroupLeadUserId) : null,
+        lastName: editLastName.trim() ? editLastName.trim() : null,
+        firstName: editFirstName.trim() ? editFirstName.trim() : null,
+        middleName: editMiddleName.trim() ? editMiddleName.trim() : null,
+      });
+
+      if (result.user.id === currentUser.id) {
+        onCurrentUserUpdated({
+          ...currentUser,
+          username: result.user.username,
+          lastName: result.user.lastName,
+          firstName: result.user.firstName,
+          middleName: result.user.middleName,
+          role: result.user.role,
+          mustChangePassword: result.user.mustChangePassword,
+          groupLeadUserId: result.user.groupLeadUserId,
+          groupLeadUsername: result.user.groupLeadUsername,
+        });
+      }
+
+      setEditModalOpen(false);
+      setEditUserId(null);
+      setEditUsername("");
+      setEditRole("manager");
+      setEditGroupLeadUserId("");
+      setEditLastName("");
+      setEditFirstName("");
+      setEditMiddleName("");
+      setEditError(null);
+      await loadUsers();
+    } catch (requestError) {
+      setEditError(getApiErrorMessage(requestError, "Не удалось обновить пользователя."));
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  };
+
   const handleResetPassword = async (user: User) => {
     try {
       setIsRowActionLoading(user.id);
@@ -778,6 +890,14 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                     <div className={styles.userCardActions}>
                       <Button
                         className={styles.fullWidthButton}
+                        variant="primary"
+                        onClick={() => openEditUser(user)}
+                        disabled={isBusyPassword}
+                      >
+                        Редактировать
+                      </Button>
+                      <Button
+                        className={styles.fullWidthButton}
                         variant="ghost"
                         onClick={() => void handleResetPassword(user)}
                         disabled={isBusyPassword || user.role === "owner"}
@@ -893,6 +1013,118 @@ export function SettingsPage({ currentUser, onCurrentUserUpdated }: SettingsPage
                 </Button>
                 <Button type="submit" disabled={isCreateSubmitting}>
                   {isCreateSubmitting ? <Spinner size={20} /> : "Создать"}
+                </Button>
+              </div>
+            </form>
+          </Modal>
+
+          <Modal
+            open={editModalOpen}
+            title="Редактировать сотрудника"
+            onClose={closeEditModal}
+            className={styles.createModal}
+          >
+            <form className={styles.createForm} onSubmit={handleEditSubmit} noValidate>
+              <InputField
+                label="Логин"
+                value={editUsername}
+                onChange={(event) => setEditUsername(sanitizeUsername(event.target.value))}
+                disabled={isEditSubmitting}
+                placeholder="например: ivanov"
+                required
+              />
+
+              <SelectField
+                label="Роль"
+                value={editRole}
+                onChange={(event) => {
+                  const nextRole = event.target.value as EditableUserRole;
+                  setEditRole(nextRole);
+
+                  if (nextRole !== "manager") {
+                    setEditGroupLeadUserId("");
+                    return;
+                  }
+
+                  if (!editGroupLeadUserId && editableGroupLeads.length > 0) {
+                    setEditGroupLeadUserId(String(editableGroupLeads[0].id));
+                  }
+                }}
+                disabled={isEditSubmitting || editRole === "owner"}
+                options={
+                  editRole === "owner"
+                    ? [{ value: "owner", label: "Владелец" }]
+                    : [
+                        { value: "manager", label: "Менеджер" },
+                        { value: "group_lead", label: "Руководитель группы" },
+                      ]
+                }
+              />
+
+              <SelectField
+                label="Руководитель группы"
+                value={editRole === "manager" ? editGroupLeadUserId : ""}
+                onChange={(event) => setEditGroupLeadUserId(event.target.value)}
+                disabled={isEditSubmitting || editRole !== "manager" || editableGroupLeads.length === 0}
+                options={
+                  editRole !== "manager"
+                    ? [{ value: "", label: "Не требуется", disabled: true }]
+                    : editableGroupLeads.length === 0
+                      ? [
+                          {
+                            value: "",
+                            label: "Сначала создайте руководителя группы",
+                            disabled: true,
+                          },
+                        ]
+                      : editableGroupLeads.map((lead) => ({
+                          value: String(lead.id),
+                          label: lead.username,
+                        }))
+                }
+              />
+
+              <div className={styles.createNameRow}>
+                <InputField
+                  label="Фамилия"
+                  value={editLastName}
+                  onChange={(event) => setEditLastName(sanitizePersonName(event.target.value))}
+                  disabled={isEditSubmitting}
+                  placeholder="необязательно"
+                />
+
+                <InputField
+                  label="Имя"
+                  value={editFirstName}
+                  onChange={(event) => setEditFirstName(sanitizePersonName(event.target.value))}
+                  disabled={isEditSubmitting}
+                  placeholder="необязательно"
+                />
+
+                <InputField
+                  label="Отчество"
+                  value={editMiddleName}
+                  onChange={(event) => setEditMiddleName(sanitizePersonName(event.target.value))}
+                  disabled={isEditSubmitting}
+                  placeholder="необязательно"
+                />
+              </div>
+
+              {editError && <Alert tone="error">{editError}</Alert>}
+
+              <Divider />
+
+              <div className={styles.createActions}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={closeEditModal}
+                  disabled={isEditSubmitting}
+                >
+                  Отмена
+                </Button>
+                <Button type="submit" disabled={isEditSubmitting}>
+                  {isEditSubmitting ? <Spinner size={20} /> : "Сохранить"}
                 </Button>
               </div>
             </form>

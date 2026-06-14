@@ -1,4 +1,4 @@
-import type { CreateUserRole } from "../api/usersApi";
+import type { CreateUserRole, EditableUserRole } from "../api/usersApi";
 import type { CompanyFormValues } from "../types/company";
 import type { DealFormValues } from "../types/deal";
 
@@ -52,6 +52,15 @@ export interface UserProfileFormValues {
 export interface CreateUserFormValues {
   username: string;
   role: CreateUserRole;
+  groupLeadUserId: string;
+  lastName: string;
+  firstName: string;
+  middleName: string;
+}
+
+export interface EditUserFormValues {
+  username: string;
+  role: EditableUserRole;
   groupLeadUserId: string;
   lastName: string;
   firstName: string;
@@ -215,6 +224,27 @@ export const validateCreateUserForm = (
   values: CreateUserFormValues,
 ): ValidationErrors<keyof CreateUserFormValues> => {
   const errors: ValidationErrors<keyof CreateUserFormValues> = {
+    ...validateUserProfileForm(values),
+  };
+  const username = trim(values.username).toLowerCase();
+
+  if (!username) {
+    errors.username = "Введите логин сотрудника.";
+  } else if (!usernamePattern.test(username)) {
+    errors.username = `Логин должен содержать от ${USERNAME_MIN_LENGTH} до ${USERNAME_MAX_LENGTH} символов: строчные латинские буквы, цифры, ".", "-" или "_".`;
+  }
+
+  if (values.role === "manager" && !trim(values.groupLeadUserId)) {
+    errors.groupLeadUserId = "Для менеджера нужно указать руководителя группы.";
+  }
+
+  return errors;
+};
+
+export const validateEditUserForm = (
+  values: EditUserFormValues,
+): ValidationErrors<keyof EditUserFormValues> => {
+  const errors: ValidationErrors<keyof EditUserFormValues> = {
     ...validateUserProfileForm(values),
   };
   const username = trim(values.username).toLowerCase();

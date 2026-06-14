@@ -40,6 +40,7 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export type CreateUserRole = Exclude<UserRole, "owner">;
+export type EditableUserRole = UserRole;
 
 interface CreateUserResponse {
   message: string;
@@ -61,6 +62,33 @@ export const createUser = async (params: {
     message: data.message,
     user: toUser(data.user),
     tempPassword: data.tempPassword,
+  };
+};
+
+interface UpdateUserResponse {
+  message: string;
+  user: UserDto;
+}
+
+export const updateUser = async (
+  userId: number,
+  params: {
+    username: string;
+    role: EditableUserRole;
+    groupLeadUserId: number | null;
+    lastName?: string | null;
+    firstName?: string | null;
+    middleName?: string | null;
+  },
+): Promise<{ message: string; user: User }> => {
+  const { data } = await httpClient.patch<UpdateUserResponse>(
+    API_ROUTES.ownerUserById(userId),
+    params,
+  );
+
+  return {
+    message: data.message,
+    user: toUser(data.user),
   };
 };
 

@@ -33,6 +33,7 @@ export const API_ROUTES = {
 
   users: "/api/users",
   ownerUsers: "/api/owner/users",
+  ownerUserById: (userId: number) => `/api/owner/users/${userId}`,
   ownerUserResetPassword: (userId: number) => `/api/owner/users/${userId}/reset-password`,
   groupLeadManagers: "/api/group-lead/managers",
   usersTransferTargets: "/api/users/transfer-targets",
